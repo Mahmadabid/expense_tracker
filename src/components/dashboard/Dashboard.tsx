@@ -439,48 +439,74 @@ export function Dashboard() {
                 <p className="text-center text-gray-500 py-8">No transactions yet</p>
               ) : (
                 <div className="space-y-3">
-                  {filteredTransactions.slice(0, 5).map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                            transaction.type === "expense" ? "bg-blue-100" : "bg-purple-100"
-                          }`}
-                        >
-                          <span className="text-lg">
-                            {transaction.type === "expense" ? "💳" : "🤝"}
-                          </span>
+                  {filteredTransactions.slice(0, 5).map((transaction) => {
+                    // Color scheme:
+                    // Expense = Red (money spent)
+                    // Lending = Blue (money lent out)
+                    // Borrowing = Green (money received/borrowed)
+                    const bgColor = 
+                      transaction.type === "expense" 
+                        ? "bg-red-100" 
+                        : transaction.role === "lender"
+                        ? "bg-blue-100"
+                        : "bg-green-100";
+                    
+                    const textColor = 
+                      transaction.type === "expense" 
+                        ? "text-red-700" 
+                        : transaction.role === "lender"
+                        ? "text-blue-700"
+                        : "text-green-700";
+
+                    const icon = 
+                      transaction.type === "expense" 
+                        ? "💸" 
+                        : transaction.role === "lender"
+                        ? "📤"
+                        : "📥";
+
+                    return (
+                      <div
+                        key={transaction.id}
+                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${bgColor}`}>
+                            <span className="text-lg">{icon}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {transaction.description || transaction.category}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {new Intl.DateTimeFormat("en", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }).format(transaction.date)}
+                              {transaction.type === "loan" && (
+                                <span className={`ml-2 font-medium ${textColor}`}>
+                                  {transaction.role === "lender" ? "Lent" : "Borrowed"}
+                                </span>
+                              )}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {transaction.description || transaction.category}
+                        <div className="text-right">
+                          <p className={`font-semibold ${textColor}`}>
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: transaction.currency,
+                            }).format(transaction.amount)}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            {new Intl.DateTimeFormat("en", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }).format(transaction.date)}
-                          </p>
+                          {transaction.type === "loan" && (
+                            <p className="text-xs text-gray-600">{transaction.counterparty}</p>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">
-                          {new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: transaction.currency,
-                          }).format(transaction.amount)}
-                        </p>
-                        {transaction.type === "loan" && (
-                          <p className="text-xs text-gray-600">{transaction.counterparty}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -786,82 +812,122 @@ export function Dashboard() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {filteredTransactions.map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                            transaction.type === "expense" ? "bg-blue-100" : "bg-purple-100"
-                          }`}
-                        >
-                          <span className="text-xl">
-                            {transaction.type === "expense" ? "💳" : "🤝"}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {transaction.description || transaction.category || "Untitled"}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {new Intl.DateTimeFormat("en", {
-                              month: "long",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }).format(transaction.date)}
-                          </p>
-                          {transaction.type === "loan" && (
+                  {filteredTransactions.map((transaction) => {
+                    // Color scheme:
+                    // Expense = Red (money spent)
+                    // Lending = Blue (money lent out)
+                    // Borrowing = Green (money received/borrowed)
+                    const bgColor = 
+                      transaction.type === "expense" 
+                        ? "bg-red-100" 
+                        : transaction.role === "lender"
+                        ? "bg-blue-100"
+                        : "bg-green-100";
+                    
+                    const textColor = 
+                      transaction.type === "expense" 
+                        ? "text-red-700" 
+                        : transaction.role === "lender"
+                        ? "text-blue-700"
+                        : "text-green-700";
+
+                    const borderColor = 
+                      transaction.type === "expense" 
+                        ? "border-red-200" 
+                        : transaction.role === "lender"
+                        ? "border-blue-200"
+                        : "border-green-200";
+
+                    const icon = 
+                      transaction.type === "expense" 
+                        ? "💸" 
+                        : transaction.role === "lender"
+                        ? "📤"
+                        : "📥";
+
+                    const label = 
+                      transaction.type === "expense" 
+                        ? "Expense" 
+                        : transaction.role === "lender"
+                        ? "Lent"
+                        : "Borrowed";
+
+                    return (
+                      <div
+                        key={transaction.id}
+                        className={`flex items-center justify-between rounded-lg border-2 ${borderColor} bg-gray-50 p-4`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-full ${bgColor}`}>
+                            <span className="text-xl">{icon}</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-gray-900">
+                                {transaction.description || transaction.category || "Untitled"}
+                              </p>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${bgColor} ${textColor}`}>
+                                {label}
+                              </span>
+                            </div>
                             <p className="text-sm text-gray-600">
-                              with {transaction.counterparty}
-                              {transaction.status && (
-                                <span
-                                  className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                    transaction.status === "settled"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-orange-100 text-orange-800"
-                                  }`}
-                                >
-                                  {transaction.status}
-                                </span>
-                              )}
+                              {new Intl.DateTimeFormat("en", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }).format(transaction.date)}
                             </p>
-                          )}
+                            {transaction.type === "loan" && (
+                              <p className="text-sm text-gray-600">
+                                with {transaction.counterparty}
+                                {transaction.status && (
+                                  <span
+                                    className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                      transaction.status === "settled"
+                                        ? "bg-gray-100 text-gray-600"
+                                        : "bg-orange-100 text-orange-800"
+                                    }`}
+                                  >
+                                    {transaction.status}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-gray-900">
-                          {new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: transaction.currency,
-                          }).format(transaction.amount)}
-                        </p>
-                        <div className="mt-1 flex flex-col gap-1">
-                          {transaction.type === "loan" && transaction.status !== "settled" && (
+                        <div className="text-right">
+                          <p className={`text-lg font-bold ${textColor}`}>
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: transaction.currency,
+                            }).format(transaction.amount)}
+                          </p>
+                          <div className="mt-1 flex flex-col gap-1">
+                            {transaction.type === "loan" && transaction.status !== "settled" && (
+                              <button
+                                onClick={() => handleSettleLoan(transaction.id)}
+                                className="cursor-pointer text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Mark as settled
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleSettleLoan(transaction.id)}
-                              className="cursor-pointer text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              onClick={() =>
+                                transaction.type === "expense"
+                                  ? handleDeleteExpense(transaction.id)
+                                  : handleDeleteLoan(transaction.id)
+                              }
+                              className="cursor-pointer text-xs text-red-600 hover:text-red-800 font-medium"
                             >
-                              Mark as settled
+                              Delete
                             </button>
-                          )}
-                          <button
-                            onClick={() =>
-                              transaction.type === "expense"
-                                ? handleDeleteExpense(transaction.id)
-                                : handleDeleteLoan(transaction.id)
-                            }
-                            className="cursor-pointer text-xs text-red-600 hover:text-red-800 font-medium"
-                          >
-                            Delete
-                          </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
