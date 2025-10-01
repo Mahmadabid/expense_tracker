@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="flowledger-gradient" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8" />
+      <stop offset="0.5" stop-color="#6366f1" />
+      <stop offset="1" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="flowledger-glow" x1="128" y1="96" x2="384" y2="416" gradientUnits="userSpaceOnUse">
+      <stop stop-color="rgba(255,255,255,0.85)" />
+      <stop offset="1" stop-color="rgba(255,255,255,0)" />
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="120" fill="url(#flowledger-gradient)" />
+  <path d="M160 360C160 360 192 288 256 288C320 288 336 208 352 176" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M160 208L208 256" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M256 160L336 240" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="186" cy="186" r="30" fill="white" opacity="0.9" />
+  <circle cx="256" cy="248" r="34" fill="white" opacity="0.9" />
+  <circle cx="338" cy="256" r="28" fill="white" opacity="0.9" />
+  <path d="M96 192C136 120 208 80 288 80C352 80 416 112 448 168" stroke="url(#flowledger-glow)" stroke-width="36" stroke-linecap="round" opacity="0.4" />
+</svg>
