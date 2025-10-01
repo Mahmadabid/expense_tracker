@@ -9,9 +9,9 @@ const COLLECTION = "loans";
 
 export const PATCH = withAuth(async (
   req: AuthenticatedRequest,
-  context?: { params: Record<string, string> }
+  props: { params: Promise<{ id: string }> }
 ) => {
-  const loanId = context?.params?.id;
+  const { id: loanId } = await props.params;
   if (!loanId) {
     return NextResponse.json({ error: "Loan ID required" }, { status: 400 });
   }
@@ -62,9 +62,9 @@ export const PATCH = withAuth(async (
 
 export const DELETE = withAuth(async (
   req: AuthenticatedRequest,
-  context?: { params: Record<string, string> }
+  props: { params: Promise<{ id: string }> }
 ) => {
-  const loanId = context?.params?.id;
+  const { id: loanId } = await props.params;
   if (!loanId) {
     return NextResponse.json({ error: "Loan ID required" }, { status: 400 });
   }

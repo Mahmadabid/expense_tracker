@@ -7,9 +7,9 @@ const COLLECTION = "expenses";
 
 export const DELETE = withAuth(async (
   req: AuthenticatedRequest,
-  context?: { params: Record<string, string> }
+  props: { params: Promise<{ id: string }> }
 ) => {
-  const expenseId = context?.params?.id;
+  const { id: expenseId } = await props.params;
   if (!expenseId) {
     return NextResponse.json({ error: "Expense ID required" }, { status: 400 });
   }

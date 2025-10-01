@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Firebase project configuration
-const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-
 type DecodedToken = {
   uid: string;
   email?: string;
@@ -87,19 +84,44 @@ export type AuthenticatedRequest = NextRequest & {
   user: DecodedToken;
 };
 
+// Handler without params (for non-dynamic routes)
 export type SecureRouteHandler = (
+  req: AuthenticatedRequest
+) => Promise<NextResponse> | NextResponse;
+
+// Handler with params (for dynamic routes)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type SecureRouteHandlerWithParams<T = any> = (
   req: AuthenticatedRequest,
-  context?: { params: Record<string, string> }
+  props: { params: T }
 ) => Promise<NextResponse> | NextResponse;
 
 /**
  * Wrapper function to secure API routes with JWT authentication
- * Usage: export const GET = withAuth(async (req) => { ... });
+ * 
+ * Overload 1: For handlers without params
  */
-export function withAuth(handler: SecureRouteHandler) {
+export function withAuth(
+  handler: SecureRouteHandler
+): (req: NextRequest) => Promise<NextResponse>;
+
+/**
+ * Overload 2: For handlers with params (dynamic routes)
+ */
+export function withAuth<T>(
+  handler: SecureRouteHandlerWithParams<T>
+): (req: NextRequest, props: { params: T }) => Promise<NextResponse>;
+
+/**
+ * Implementation
+ */
+export function withAuth<T = Record<string, string>>(
+  handler: SecureRouteHandler | SecureRouteHandlerWithParams<T>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
   return async (
     req: NextRequest,
-    context?: { params: Record<string, string> }
+    props?: { params: T }
   ): Promise<NextResponse> => {
     try {
       // Extract token from Authorization header
@@ -120,7 +142,16 @@ export function withAuth(handler: SecureRouteHandler) {
       authenticatedReq.user = decodedToken;
 
       // Call the actual handler
-      return await handler(authenticatedReq, context);
+      if (props) {
+        // Handler with params
+        return await (handler as SecureRouteHandlerWithParams<T>)(
+          authenticatedReq,
+          props
+        );
+      } else {
+        // Handler without params
+        return await (handler as SecureRouteHandler)(authenticatedReq);
+      }
     } catch (error) {
       console.error("Authentication error:", error);
       return NextResponse.json(
