@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import type { Document, WithId } from "mongodb";
 import { connectToDatabase } from "@/lib/mongodb";
 import { withAuth, type AuthenticatedRequest } from "@/lib/auth";
 import { encrypt, decrypt, sanitizeInput, isValidNumber } from "@/utils";
 import { isSupportedCurrency } from "@/constants";
+import type { WithId, Document } from "mongodb";
 
-const COLLECTION = "loans";
+const COLLECTION = "income";
 
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   const { searchParams } = new URL(req.url);
@@ -15,7 +15,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
 
-  // Verify the user can only access their own loans
+  // Verify the user can only access their own income
   if (userId !== req.user.uid) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -23,35 +23,21 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
   const { db } = await connectToDatabase();
   const documents = await db
     .collection(COLLECTION)
-    .find({ participants: userId })
+    .find({ userId })
     .sort({ createdAt: -1 })
     .toArray();
 
   const data = documents.map((doc: WithId<Document>) => {
     const decrypted = JSON.parse(decrypt(doc.payload));
     const currency = isSupportedCurrency(decrypted.currency) ? decrypted.currency : "USD";
-    const payments = decrypted.payments || [];
-    const totalPaid = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-    const remainingAmount = Number(decrypted.amount) - totalPaid;
-    
     return {
       id: doc._id.toString(),
-      lenderId: doc.lenderId,
-      borrowerId: doc.borrowerId,
+      userId: doc.userId,
       amount: Number(decrypted.amount),
       currency,
+      category: decrypted.category,
       description: decrypted.description,
-      status: doc.status,
       createdAt: doc.createdAt.toISOString(),
-      dueDate: decrypted.dueDate ?? null,
-      externalParty: decrypted.externalParty ?? null,
-      payments: payments.map((p: any) => ({
-        id: p.id,
-        amount: Number(p.amount),
-        date: p.date,
-        note: p.note || "",
-      })),
-      remainingAmount,
     };
   });
 
@@ -61,49 +47,41 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   const rawBody = await req.json();
   const sanitized = sanitizeInput(rawBody) as any;
-  const { lenderId, borrowerId, amount, description, dueDate, currency, externalParty } = sanitized ?? {};
+  const { userId, amount, category, description, currency } = sanitized ?? {};
 
-  if (!lenderId || !borrowerId || typeof lenderId !== "string" || typeof borrowerId !== "string") {
-    return NextResponse.json({ error: "lenderId and borrowerId are required" }, { status: 422 });
+  if (!userId || typeof userId !== "string") {
+    return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
 
-  // Verify the user is involved in the loan
-  if (lenderId !== req.user.uid && borrowerId !== req.user.uid && lenderId !== "EXTERNAL" && borrowerId !== "EXTERNAL") {
+  // Verify the user can only create income for themselves
+  if (userId !== req.user.uid) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  if (lenderId === borrowerId && borrowerId !== "EXTERNAL" && lenderId !== "EXTERNAL") {
-    return NextResponse.json({ error: "lenderId and borrowerId must differ" }, { status: 422 });
   }
 
   if (!isValidNumber(amount) || Number(amount) <= 0) {
     return NextResponse.json({ error: "Amount must be a positive number" }, { status: 422 });
   }
 
+  if (!category || typeof category !== "string") {
+    return NextResponse.json({ error: "category is required" }, { status: 422 });
+  }
+
   if (!isSupportedCurrency(currency)) {
     return NextResponse.json({ error: "currency is invalid" }, { status: 422 });
   }
-
-  // Build participants array for querying
-  const participants = [lenderId, borrowerId].filter(id => id !== "EXTERNAL");
 
   const payload = encrypt(
     JSON.stringify({
       amount: Number(amount),
       currency,
+      category,
       description: description ?? "",
-      dueDate: dueDate ?? null,
-      externalParty: externalParty ?? null,
-      payments: [],
     })
   );
 
   const document = {
-    lenderId,
-    borrowerId,
-    participants,
+    userId,
     payload,
-    status: "active",
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -115,17 +93,12 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
     {
       data: {
         id: result.insertedId.toString(),
-        lenderId,
-        borrowerId,
+        userId,
         amount: Number(amount),
         currency,
+        category,
         description: description ?? "",
-        status: document.status,
         createdAt: document.createdAt.toISOString(),
-        dueDate: dueDate ?? null,
-        externalParty: externalParty ?? null,
-        payments: [],
-        remainingAmount: Number(amount),
       },
     },
     { status: 201 }

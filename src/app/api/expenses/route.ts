@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { encrypt, decrypt } from "@/lib/encryption";
-import type { WithId, Document } from "mongodb";
-import { isSupportedCurrency } from "@/lib/currencies";
 import { withAuth, type AuthenticatedRequest } from "@/lib/auth";
+import { encrypt, decrypt, sanitizeInput, isValidNumber } from "@/utils";
+import { isSupportedCurrency } from "@/constants";
+import type { WithId, Document } from "mongodb";
 
 const COLLECTION = "expenses";
 
@@ -45,8 +45,9 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
 });
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
-  const body = await req.json();
-  const { userId, amount, category, description, currency } = body ?? {};
+  const rawBody = await req.json();
+  const sanitized = sanitizeInput(rawBody) as any;
+  const { userId, amount, category, description, currency } = sanitized ?? {};
 
   if (!userId || typeof userId !== "string") {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -57,7 +58,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (typeof amount !== "number" || Number.isNaN(amount) || amount <= 0) {
+  if (!isValidNumber(amount) || Number(amount) <= 0) {
     return NextResponse.json({ error: "Amount must be a positive number" }, { status: 422 });
   }
 
@@ -71,7 +72,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
 
   const payload = encrypt(
     JSON.stringify({
-      amount,
+      amount: Number(amount),
       currency,
       category,
       description: description ?? "",
@@ -93,7 +94,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
       data: {
         id: result.insertedId.toString(),
         userId,
-        amount,
+        amount: Number(amount),
         currency,
         category,
         description: description ?? "",

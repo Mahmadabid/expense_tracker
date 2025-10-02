@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { Header } from "@/components/layout/Header";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,18 +17,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FlowLedger | Collaborative Expense & Loan Tracker",
-  description: "Track personal spending, shared expenses, and inter-user loans with Firebase-authenticated dashboards.",
-  applicationName: "FlowLedger",
+  title: "Ledgerify | Modern Finance Tracker",
+  description: "Track income, expenses, and loans with a beautiful, intuitive interface. Built for modern financial management.",
+  applicationName: "Ledgerify",
   manifest: "/manifest.webmanifest",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#0f172a" },
-    { media: "(prefers-color-scheme: dark)", color: "#020617" },
-  ],
   icons: {
-    icon: [{ url: "/icons/flowledger-icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/flowledger-icon.svg" }],
-    shortcut: [{ url: "/icons/flowledger-icon.svg" }],
+    icon: [{ url: "/icons/ledgerify-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/ledgerify-maskable.svg" }],
+    shortcut: [{ url: "/icons/ledgerify-icon.svg" }],
   },
 };
 
@@ -36,12 +34,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthProvider>
-          <ServiceWorkerRegister />
-          {children}
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ServiceWorkerRegister />
+            <Header />
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,4 +1,5 @@
-import type { ExpenseCategory, ExpenseRecord, LoanRecord } from "@/lib/models";
+import type { ExpenseCategory } from "@/types";
+import type { ExpenseRecord, LoanRecord } from "@/lib/models";
 import { auth } from "@/lib/firebase";
 
 /**
@@ -223,4 +224,21 @@ export async function deleteLoan(loanId: string) {
   });
   ensureOk(response);
   return response.json();
+}
+
+export async function addLoanPayment(loanId: string, amount: number, note?: string) {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`/api/loans/${loanId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({
+      payment: {
+        amount,
+        note: note || "",
+      },
+    }),
+  });
+  ensureOk(response);
+  const data = (await response.json()) as ListResponse<unknown>;
+  return parseLoan(data.data);
 }

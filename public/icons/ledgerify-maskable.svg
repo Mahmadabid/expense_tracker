@@ -1,0 +1,19 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ledgerify Logo - Maskable Version -->
+  <defs>
+    <linearGradient id="logo-gradient-maskable" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5E6AD2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#818CF8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Safe zone background -->
+  <rect width="192" height="192" fill="#FFFFFF"/>
+  
+  <!-- Main L Shape centered -->
+  <path d="M48 36 L84 36 L84 144 L156 144 L156 168 L48 168 Z" fill="url(#logo-gradient-maskable)"/>
+  
+  <!-- 3D Depth -->
+  <path d="M84 36 L96 48 L96 144 L84 144 Z" fill="#818CF8" opacity="0.6"/>
+  <path d="M84 144 L156 144 L156 156 L96 156 Z" fill="#4E5BC2" opacity="0.4"/>
+</svg>
