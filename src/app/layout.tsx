@@ -1,48 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
-import { Header } from "@/components/layout/Header";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Ledgerify | Modern Finance Tracker",
-  description: "Track income, expenses, and loans with a beautiful, intuitive interface. Built for modern financial management.",
-  applicationName: "Ledgerify",
-  manifest: "/manifest.webmanifest",
-  icons: {
-    icon: [{ url: "/icons/ledgerify-icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/ledgerify-maskable.svg" }],
-    shortcut: [{ url: "/icons/ledgerify-icon.svg" }],
-  },
+  title: 'Expense & Loan Tracker',
+  description: 'Track your expenses, income, and loans with collaborative features',
+  keywords: ['expense tracker', 'loan tracker', 'finance', 'money management'],
+  authors: [{ name: 'Expense Tracker Team' }],
+  viewport: 'width=device-width, initial-scale=1',
+  robots: 'index, follow',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider>
-          <AuthProvider>
-            <ServiceWorkerRegister />
-            <Header />
-            {children}
-          </AuthProvider>
-        </ThemeProvider>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </head>
+      <body className={inter.className}>
+        <div id="root" className="min-h-screen bg-white dark:bg-gray-900 transition-colors">
+          {children}
+        </div>
       </body>
     </html>
   );
