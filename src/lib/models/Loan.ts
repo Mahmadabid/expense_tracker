@@ -117,7 +117,6 @@ const LoanSchema = new Schema<LoanDocument>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     type: {
       type: String,
@@ -133,8 +132,8 @@ const LoanSchema = new Schema<LoanDocument>(
     currency: {
       type: String,
       required: true,
-      enum: ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'],
-      default: 'USD',
+      enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'],
+      default: 'PKR',
     },
     description: {
       type: String,
@@ -150,14 +149,12 @@ const LoanSchema = new Schema<LoanDocument>(
     date: {
       type: Date,
       required: true,
-      index: true,
     },
     status: {
       type: String,
       required: true,
       enum: ['active', 'paid', 'cancelled'],
       default: 'active',
-      index: true,
     },
     tags: [{
       type: String,
@@ -219,7 +216,6 @@ const LoanSchema = new Schema<LoanDocument>(
     },
     dueDate: {
       type: Date,
-      index: true,
     },
     interestRate: {
       type: Number,
@@ -231,7 +227,6 @@ const LoanSchema = new Schema<LoanDocument>(
     pendingApprovals: [PendingApprovalSchema],
     shareToken: {
       type: String,
-      index: true,
       sparse: true,
     },
   },

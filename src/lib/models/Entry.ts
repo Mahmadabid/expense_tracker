@@ -12,13 +12,11 @@ const EntrySchema = new Schema<EntryDocument>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     type: {
       type: String,
       required: true,
       enum: ['income', 'expense', 'loan'],
-      index: true,
     },
     amount: {
       type: Number,
@@ -34,8 +32,8 @@ const EntrySchema = new Schema<EntryDocument>(
     currency: {
       type: String,
       required: true,
-      enum: ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'],
-      default: 'USD',
+      enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'],
+      default: 'PKR',
     },
     description: {
       type: String,
@@ -51,14 +49,12 @@ const EntrySchema = new Schema<EntryDocument>(
     date: {
       type: Date,
       required: true,
-      index: true,
     },
     status: {
       type: String,
       required: true,
       enum: ['active', 'paid', 'cancelled'],
       default: 'active',
-      index: true,
     },
     tags: [{
       type: String,

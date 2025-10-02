@@ -18,7 +18,7 @@ export interface User {
 export type EntryType = 'income' | 'expense' | 'loan';
 export type LoanDirection = 'lent' | 'borrowed';
 export type EntryStatus = 'active' | 'paid' | 'cancelled';
-export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD';
+export type Currency = 'PKR' | 'USD' | 'EUR' | 'GBP' | 'KWD' | 'JPY' | 'CAD' | 'AUD' | 'SAR' | 'AED';
 
 export interface Entry {
   _id: string;

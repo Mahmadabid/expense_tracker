@@ -37,7 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             isGuest: false,
             preferences: {
               darkMode: false,
-              currency: 'USD',
+              currency: 'PKR',
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
             createdAt: new Date(),
@@ -46,11 +46,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           
           // Sync user with backend
           const token = await firebaseUser.getIdToken();
+          localStorage.setItem('firebaseToken', token);
+          
           const response = await fetch('/api/auth/verify', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
+              'X-Display-Name': appUser.displayName || '',
+              'X-User-Email': appUser.email || '',
             },
           });
           
@@ -78,7 +82,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             guestToken,
             preferences: {
               darkMode: localStorage.getItem('darkMode') === 'true',
-              currency: 'USD',
+              currency: 'PKR',
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
             createdAt: new Date(),
@@ -113,6 +117,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true);
       await firebaseSignOut();
       localStorage.removeItem('guestToken');
+      localStorage.removeItem('firebaseToken');
       setUser(null);
     } catch (error) {
       console.error('Sign out error:', error);
@@ -137,7 +142,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         guestToken,
         preferences: {
           darkMode: false,
-          currency: 'USD',
+          currency: 'PKR',
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         createdAt: new Date(),

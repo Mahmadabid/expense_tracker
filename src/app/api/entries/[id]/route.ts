@@ -1,104 +1,99 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { verifyIdToken } from '@/lib/firebase/admin';
+import { connectDB } from '@/lib/db/mongodb';
+import { EntryModel } from '@/lib/models';
+import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse } from '@/lib/utils/apiResponse';
+import { logAudit } from '@/lib/utils/auditLogger';
 
-// GET /api/entries/[id] - Get specific entry
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
-    }
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) return unauthorizedResponse('No token provided');
+
+    const decodedToken = await verifyIdToken(token);
+    if (!decodedToken) return unauthorizedResponse('Invalid token');
 
     const { id } = await context.params;
+    await connectDB();
 
-    // Return mock entry for testing
-    const mockEntry = {
-      _id: id,
-      type: 'expense',
-      amount: 25.99,
-      currency: 'USD',
-      description: 'Coffee',
-      date: new Date(),
-      status: 'active',
-      category: 'Food & Drink',
-      userId: 'test-user-id',
-    };
-    
-    return NextResponse.json({
-      success: true,
-      data: mockEntry,
-    });
+    const entry = await EntryModel.findOne({ _id: id, userId: decodedToken.uid }).lean();
+    if (!entry) return notFoundResponse('Entry not found');
+
+    return successResponse(entry);
   } catch (error) {
-    console.error('Error fetching entry:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Entry fetch error:', error);
+    return serverErrorResponse();
   }
 }
 
-// PUT /api/entries/[id] - Update entry
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
-    }
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) return unauthorizedResponse('No token provided');
+
+    const decodedToken = await verifyIdToken(token);
+    if (!decodedToken) return unauthorizedResponse('Invalid token');
 
     const { id } = await context.params;
     const body = await request.json();
-    
-    // Return updated mock entry
-    const updatedEntry = {
-      _id: id,
-      ...body,
-      userId: 'test-user-id',
-      updatedAt: new Date(),
-      version: 2,
-    };
-    
-    return NextResponse.json({
-      success: true,
-      data: updatedEntry,
-      message: 'Entry updated successfully',
+    await connectDB();
+
+    const entry = await EntryModel.findOne({ _id: id, userId: decodedToken.uid });
+    if (!entry) return notFoundResponse('Entry not found');
+
+    const changes: any[] = [];
+    ['amount', 'description', 'category', 'date', 'status'].forEach(field => {
+      if (body[field] !== undefined && (entry as any)[field] !== body[field]) {
+        changes.push({ field, oldValue: (entry as any)[field], newValue: body[field] });
+        (entry as any)[field] = body[field];
+      }
     });
-  } catch (error) {
-    console.error('Error updating entry:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+
+    entry.lastModifiedBy = decodedToken.uid;
+    await entry.save();
+
+    if (changes.length > 0) {
+      await logAudit('entry', id, 'update', decodedToken.uid, changes);
+    }
+
+    return successResponse(entry, 'Entry updated successfully');
+  } catch (error: any) {
+    console.error('Entry update error:', error);
+    return serverErrorResponse(error?.message || 'Failed to update entry');
   }
 }
 
-// DELETE /api/entries/[id] - Delete entry
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
-    }
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Entry deleted successfully',
-    });
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) return unauthorizedResponse('No token provided');
+
+    const decodedToken = await verifyIdToken(token);
+    if (!decodedToken) return unauthorizedResponse('Invalid token');
+
+    const { id } = await context.params;
+    await connectDB();
+
+    const entry = await EntryModel.findOneAndDelete({ _id: id, userId: decodedToken.uid });
+    if (!entry) return notFoundResponse('Entry not found');
+
+    await logAudit('entry', id, 'delete', decodedToken.uid, []);
+
+    return successResponse(null, 'Entry deleted successfully');
   } catch (error) {
-    console.error('Error deleting entry:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Entry delete error:', error);
+    return serverErrorResponse();
   }
 }

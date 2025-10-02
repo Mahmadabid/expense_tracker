@@ -20,24 +20,20 @@ const AuditLogSchema = new Schema<AuditLogDocument>(
       type: String,
       required: true,
       enum: ['entry', 'loan', 'payment', 'user'],
-      index: true,
     },
     entityId: {
       type: String,
       required: true,
-      index: true,
     },
     action: {
       type: String,
       required: true,
       trim: true,
       maxlength: 100,
-      index: true,
     },
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     changes: [{
       field: {
@@ -55,7 +51,6 @@ const AuditLogSchema = new Schema<AuditLogDocument>(
       type: Date,
       required: true,
       default: Date.now,
-      index: true,
     },
     ipAddress: {
       type: String,

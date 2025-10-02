@@ -31,7 +31,6 @@ const UserSchema = new Schema<UserDocument>(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     email: {
       type: String,
@@ -68,14 +67,13 @@ const UserSchema = new Schema<UserDocument>(
     guestToken: {
       type: String,
       sparse: true,
-      index: true,
     },
     preferences: {
       darkMode: { type: Boolean, default: false },
       currency: { 
         type: String, 
-        enum: ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'], 
-        default: 'USD' 
+        enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'], 
+        default: 'PKR' 
       },
       timezone: { type: String, default: 'UTC' },
     },
