@@ -4,7 +4,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { LoanModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 async function auth(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -68,12 +67,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     loan.lastModifiedBy = a.uid;
 
     await loan.save();
-
-    // Log the payment
-    await logAudit('loan', String(loan._id), 'payment_added', a.uid, [
-      { field: 'payment_amount', oldValue: null, newValue: amount },
-      { field: 'remaining_amount', oldValue: loan.remainingAmount + amount, newValue: loan.remainingAmount },
-    ]);
 
     return successResponse(newPayment, 'Payment added successfully', 201);
   } catch (error: any) {

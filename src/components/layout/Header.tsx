@@ -3,38 +3,10 @@
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useEffect, useState } from 'react';
-
-const SUPPORTED_CURRENCIES = ['PKR','KWD','USD','EUR','GBP','AED','SAR','CAD','AUD','JPY'] as const;
 
 export function Header() {
   const { user, loading, signIn, signOut, signInAsGuest } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const [currency, setCurrency] = useState('PKR');
-
-  useEffect(() => {
-    const stored = localStorage.getItem('currency');
-    if (stored && SUPPORTED_CURRENCIES.includes(stored as any)) {
-      setCurrency(stored);
-    } else if (user?.preferences?.currency) {
-      setCurrency(user.preferences.currency);
-    }
-  }, [user?.preferences?.currency]);
-
-  useEffect(() => {
-    localStorage.setItem('currency', currency);
-    // Persist to backend if user is authenticated
-    if (user && !user.isGuest) {
-      fetch('/api/user/preferences', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('firebaseToken')}`,
-        },
-        body: JSON.stringify({ currency }),
-      }).catch(err => console.error('Failed to save currency preference:', err));
-    }
-  }, [currency, user]);
 
   if (loading) {
     return (
@@ -57,24 +29,10 @@ export function Header() {
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          <div className="flex items-center">
             <h1 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white/80">
               Expense Tracker
             </h1>
-            {/* Currency Selector */}
-            <div className="relative">
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="cursor-pointer appearance-none bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-sm rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-0 focus:border-blue-500"
-                aria-label="Select currency"
-              >
-                {SUPPORTED_CURRENCIES.map(cur => (
-                  <option key={cur} value={cur}>{cur}</option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-300 text-xs">▼</span>
-            </div>
           </div>
 
           <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4">

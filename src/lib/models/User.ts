@@ -10,21 +10,6 @@ interface UserModel extends Model<UserDocument> {
   findByGuestToken(guestToken: string): Promise<UserDocument | null>;
 }
 
-const NotificationPreferencesSchema = new Schema({
-  email: {
-    invitations: { type: Boolean, default: true },
-    approvals: { type: Boolean, default: true },
-    reminders: { type: Boolean, default: true },
-    payments: { type: Boolean, default: true },
-  },
-  inApp: {
-    invitations: { type: Boolean, default: true },
-    approvals: { type: Boolean, default: true },
-    reminders: { type: Boolean, default: true },
-    payments: { type: Boolean, default: true },
-  },
-});
-
 const UserSchema = new Schema<UserDocument>(
   {
     firebaseUid: {
@@ -68,15 +53,6 @@ const UserSchema = new Schema<UserDocument>(
       type: String,
       sparse: true,
       unique: true,
-    },
-    preferences: {
-      darkMode: { type: Boolean, default: false },
-      currency: { 
-        type: String, 
-        enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'], 
-        default: 'PKR' 
-      },
-      timezone: { type: String, default: 'UTC' },
     },
     lastActive: {
       type: Date,

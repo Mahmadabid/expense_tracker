@@ -6,11 +6,6 @@ export interface User {
   photoURL?: string;
   isGuest: boolean;
   guestToken?: string;
-  preferences: {
-    darkMode: boolean;
-    currency: string;
-    timezone: string;
-  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -108,23 +103,6 @@ export interface PendingApproval {
   createdAt: Date;
 }
 
-export interface AuditLog {
-  _id: string;
-  entityType: 'entry' | 'loan' | 'payment' | 'user';
-  entityId: string;
-  action: string;
-  userId: string;
-  changes: {
-    field: string;
-    oldValue: unknown;
-    newValue: unknown;
-  }[];
-  metadata?: Record<string, unknown>;
-  timestamp: Date;
-  ipAddress?: string;
-  userAgent?: string;
-}
-
 export interface FilterOptions {
   type?: EntryType[];
   status?: EntryStatus[];
@@ -156,21 +134,6 @@ export interface ApiResponse<T = unknown> {
     limit: number;
     total: number;
     pages: number;
-  };
-}
-
-export interface NotificationPreferences {
-  email: {
-    invitations: boolean;
-    approvals: boolean;
-    reminders: boolean;
-    payments: boolean;
-  };
-  inApp: {
-    invitations: boolean;
-    approvals: boolean;
-    reminders: boolean;
-    payments: boolean;
   };
 }
 

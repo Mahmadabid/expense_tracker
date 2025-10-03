@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { getAuthHeader } from '@/lib/firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface DashboardData {
@@ -25,6 +26,9 @@ export function MainContent() {
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [currency, setCurrency] = useState('PKR');
+  
+  const SUPPORTED_CURRENCIES = ['PKR','KWD','USD','EUR','GBP','AED','SAR','CAD','AUD','JPY'] as const;
 
   const closeModal = () => {
     setModalType(null);
@@ -37,12 +41,23 @@ export function MainContent() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const stored = localStorage.getItem('currency');
+    if (stored && SUPPORTED_CURRENCIES.includes(stored as any)) {
+      setCurrency(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('currency', currency);
+  }, [currency]);
+
   const fetchDashboardData = async () => {
     setDataLoading(true);
     try {
-      const token = localStorage.getItem('firebaseToken');
+      const authHeaders = await getAuthHeader();
       const res = await fetch('/api/dashboard', {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
@@ -82,7 +97,7 @@ export function MainContent() {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('firebaseToken');
+      const authHeaders = await getAuthHeader();
       const endpoint = isLoan ? '/api/loans' : '/api/entries';
       const payload: any = isLoan ? {
         amount: amt,
@@ -105,7 +120,7 @@ export function MainContent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...authHeaders,
         },
         body: JSON.stringify(payload),
       });
@@ -165,9 +180,27 @@ export function MainContent() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white/80">
-          {user.isGuest ? 'Guest Dashboard' : `Welcome back, ${user.displayName || 'User'}!`}
-        </h2>
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white/80">
+              {user.isGuest ? 'Guest Dashboard' : `Welcome back, ${user.displayName || 'User'}!`}
+            </h2>
+          </div>
+          {/* Currency Selector */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">Currency:</label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="cursor-pointer appearance-none bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-sm rounded-md px-3 py-1.5 focus:outline-none focus:ring-0 focus:border-blue-500"
+              aria-label="Select currency"
+            >
+              {SUPPORTED_CURRENCIES.map(cur => (
+                <option key={cur} value={cur}>{cur}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         {user.isGuest && (
           <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-md p-4">
             <p className="text-yellow-800 dark:text-yellow-200">
@@ -183,19 +216,19 @@ export function MainContent() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
           <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Total Income</h3>
           <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600 dark:text-green-400">
-            {dataLoading ? '...' : `${localStorage.getItem('currency') || 'PKR'} ${dashboardData?.summary.totalIncome.toFixed(2) || '0.00'}`}
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalIncome.toFixed(2) || '0.00'}`}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
           <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Total Expenses</h3>
           <p className="text-xl sm:text-2xl md:text-3xl font-bold text-red-600 dark:text-red-400">
-            {dataLoading ? '...' : `${localStorage.getItem('currency') || 'PKR'} ${dashboardData?.summary.totalExpense.toFixed(2) || '0.00'}`}
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalExpense.toFixed(2) || '0.00'}`}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
           <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Net Balance</h3>
           <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">
-            {dataLoading ? '...' : `${localStorage.getItem('currency') || 'PKR'} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
           </p>
         </div>
       </div>
@@ -226,8 +259,8 @@ export function MainContent() {
 
       {/* Modal for Adding Income/Expense/Loan */}
       {modalType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
-          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-lg p-4 sm:p-6 my-8 max-h-[90vh] overflow-y-auto">
             <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 capitalize text-gray-900 dark:text-white/80">Add {modalType}</h4>
             <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit}>
               {errorMessage && (
@@ -237,7 +270,15 @@ export function MainContent() {
               )}
               <div>
                 <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Amount</label>
-                <input type="number" step="0.01" required value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  required 
+                  value={formData.amount} 
+                  onChange={(e) => setFormData({...formData, amount: e.target.value})} 
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" 
+                />
               </div>
               <div>
                 <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description (optional)</label>

@@ -3,7 +3,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { LoanModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 async function auth(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -83,8 +82,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     loan.lastModifiedBy = a.uid;
     await loan.save();
 
-    await logAudit('loan', String(loan._id), 'update', a.uid, changes);
-
     return successResponse(loan, 'Loan updated');
   } catch (err: any) {
     console.error('Loan update error:', err);
@@ -108,7 +105,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     if (!canEdit) return unauthorizedResponse('Not allowed');
 
     await LoanModel.deleteOne({ _id: loan._id });
-    await logAudit('loan', String(loan._id), 'delete', a.uid, [ { field: 'deleted', oldValue: false, newValue: true } ]);
 
     return successResponse({ id: params.id }, 'Loan deleted');
   } catch (err) {

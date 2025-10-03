@@ -44,7 +44,7 @@ export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void)
   return onAuthStateChanged(auth, callback);
 };
 
-// Get ID token
+// Get ID token (Firebase manages this securely in IndexedDB)
 export const getIdToken = async (forceRefresh = false): Promise<string | null> => {
   const user = getCurrentUser();
   if (!user) return null;
@@ -55,6 +55,16 @@ export const getIdToken = async (forceRefresh = false): Promise<string | null> =
     console.error('Error getting ID token:', error);
     return null;
   }
+};
+
+// Get auth header for API calls
+export const getAuthHeader = async (): Promise<Record<string, string>> => {
+  const token = await getIdToken();
+  if (!token) return {};
+  
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
 };
 
 // Generate guest token

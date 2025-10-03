@@ -35,18 +35,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             displayName: firebaseUser.displayName || '',
             photoURL: firebaseUser.photoURL || undefined,
             isGuest: false,
-            preferences: {
-              darkMode: false,
-              currency: 'PKR',
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
             createdAt: new Date(),
             updatedAt: new Date(),
           };
           
-          // Sync user with backend
+          // Sync user with backend (Firebase manages tokens securely)
           const token = await firebaseUser.getIdToken();
-          localStorage.setItem('firebaseToken', token);
           
           const response = await fetch('/api/auth/verify', {
             method: 'POST',
@@ -80,11 +74,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             displayName: 'Guest User',
             isGuest: true,
             guestToken,
-            preferences: {
-              darkMode: localStorage.getItem('darkMode') === 'true',
-              currency: 'PKR',
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
             createdAt: new Date(),
             updatedAt: new Date(),
           };
@@ -117,7 +106,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true);
       await firebaseSignOut();
       localStorage.removeItem('guestToken');
-      localStorage.removeItem('firebaseToken');
       setUser(null);
     } catch (error) {
       console.error('Sign out error:', error);
@@ -140,11 +128,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         displayName: 'Guest User',
         isGuest: true,
         guestToken,
-        preferences: {
-          darkMode: false,
-          currency: 'PKR',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
         createdAt: new Date(),
         updatedAt: new Date(),
       };

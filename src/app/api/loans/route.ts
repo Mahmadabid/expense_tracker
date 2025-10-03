@@ -3,7 +3,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { LoanModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, errorResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 // GET /api/loans - list loans for user (owned or collaborator)
 export async function GET(request: NextRequest) {
@@ -92,11 +91,6 @@ export async function POST(request: NextRequest) {
     if (dueDate) loanData.dueDate = new Date(dueDate);
 
     const loan = await LoanModel.create(loanData);
-
-    await logAudit('loan', String(loan._id), 'create', userId, [
-      { field: 'amount', oldValue: null, newValue: amount },
-      { field: 'direction', oldValue: null, newValue: direction },
-    ]);
 
     return successResponse(loan, 'Loan created successfully', 201);
   } catch (error: any) {

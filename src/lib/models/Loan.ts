@@ -1,5 +1,6 @@
 import mongoose, { Schema, model, Document, Model } from 'mongoose';
 import { Loan, LoanDirection, Payment, LoanCollaborator, PendingApproval } from '@/types';
+import { encryptObject, decryptObject } from '@/lib/utils/encryption';
 
 interface LoanDocument extends Omit<Loan, '_id'>, Document {
   addPayment(payment: Omit<Payment, '_id' | 'createdAt'>): Payment;
@@ -139,7 +140,7 @@ const PendingApprovalSchema = new Schema<PendingApproval>({
   _id: true,
 });
 
-const LoanSchema = new Schema<LoanDocument>(
+const LoanSchema = new Schema(
   {
     userId: {
       type: String,
@@ -151,22 +152,22 @@ const LoanSchema = new Schema<LoanDocument>(
       enum: ['loan'],
       default: 'loan',
     },
-    amount: {
-      type: Number,
-      required: true,
-      min: [0, 'Amount must be positive'],
-    },
+    // Encrypted sensitive data bundled as single string
+    encryptedData: String,
+    // Virtual fields populated from encryptedData
+    amount: Schema.Types.Mixed,
+    originalAmount: Schema.Types.Mixed,
+    remainingAmount: Schema.Types.Mixed,
+    description: Schema.Types.Mixed,
+    counterparty: Schema.Types.Mixed,
+    payments: Schema.Types.Mixed,
+    comments: Schema.Types.Mixed,
+    // Keep indexable/queryable fields unencrypted
     currency: {
       type: String,
       required: true,
       enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'],
       default: 'PKR',
-    },
-    description: {
-      type: String,
-      required: false,
-      trim: true,
-      maxlength: 500,
     },
     category: {
       type: String,
@@ -206,46 +207,9 @@ const LoanSchema = new Schema<LoanDocument>(
       required: true,
       enum: ['lent', 'borrowed'],
     },
-    counterparty: {
-      userId: String,
-      name: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 100,
-      },
-      email: {
-        type: String,
-        trim: true,
-        lowercase: true,
-        validate: {
-          validator: function(v: string) {
-            return !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-          },
-          message: 'Invalid email format',
-        },
-      },
-      phone: {
-        type: String,
-        trim: true,
-        maxlength: 20,
-      },
-    },
-    originalAmount: {
-      type: Number,
-      required: true,
-      min: [0, 'Original amount must be positive'],
-    },
-    remainingAmount: {
-      type: Number,
-      required: true,
-      min: [0, 'Remaining amount must be non-negative'],
-    },
     dueDate: {
       type: Date,
     },
-    payments: [PaymentSchema],
-    comments: [LoanCommentSchema],
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
     shareToken: {
@@ -263,20 +227,82 @@ const LoanSchema = new Schema<LoanDocument>(
 // Indexes
 LoanSchema.index({ userId: 1, direction: 1 });
 LoanSchema.index({ userId: 1, status: 1 });
-LoanSchema.index({ 'counterparty.userId': 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
 LoanSchema.index({ dueDate: 1 });
 
-// Pre-save middleware
+// Pre-save middleware - Encrypt sensitive data
 LoanSchema.pre('save', function(next) {
-  if (this.isNew) {
-    this.version = 1;
-    this.originalAmount = this.amount;
-    this.remainingAmount = this.amount;
-  } else if (this.isModified() && !this.isNew) {
-    this.version = (this.version || 1) + 1;
+  const doc = this as any;
+  
+  // Bundle all sensitive data into encryptedData field
+  if (doc.amount !== undefined || doc.description !== undefined || doc.counterparty) {
+    const sensitiveData: any = {
+      amount: doc.amount,
+      originalAmount: doc.originalAmount || doc.amount,
+      remainingAmount: doc.remainingAmount !== undefined ? doc.remainingAmount : doc.amount,
+      description: doc.description || '',
+      counterparty: doc.counterparty || null,
+      payments: doc.payments || [],
+      comments: doc.comments || [],
+    };
+    
+    doc.encryptedData = encryptObject(sensitiveData);
+    
+    // Remove plain fields
+    delete doc.amount;
+    delete doc.originalAmount;
+    delete doc.remainingAmount;
+    delete doc.description;
+    delete doc.counterparty;
+    delete doc.payments;
+    delete doc.comments;
   }
+  
+  // Version management
+  if (this.isNew) {
+    (this as any).version = 1;
+  } else if (this.isModified() && !this.isNew) {
+    (this as any).version = ((this as any).version || 1) + 1;
+  }
+  
   next();
+});
+
+// Post-find middleware - Decrypt sensitive data
+function decryptLoanData(doc: any) {
+  if (doc && doc.encryptedData) {
+    const decrypted = decryptObject<{
+      amount: number;
+      originalAmount: number;
+      remainingAmount: number;
+      description?: string;
+      counterparty: any;
+      payments: any[];
+      comments: any[];
+    }>(doc.encryptedData);
+    
+    if (decrypted) {
+      doc.amount = decrypted.amount;
+      doc.originalAmount = decrypted.originalAmount;
+      doc.remainingAmount = decrypted.remainingAmount;
+      doc.description = decrypted.description || '';
+      doc.counterparty = decrypted.counterparty;
+      doc.payments = decrypted.payments || [];
+      doc.comments = decrypted.comments || [];
+    }
+  }
+}
+
+LoanSchema.post('find', function(docs: LoanDocument[]) {
+  docs.forEach(decryptLoanData);
+});
+
+LoanSchema.post('findOne', function(doc: LoanDocument | null) {
+  if (doc) decryptLoanData(doc);
+});
+
+LoanSchema.post('findOneAndUpdate', function(doc: LoanDocument | null) {
+  if (doc) decryptLoanData(doc);
 });
 
 // Methods

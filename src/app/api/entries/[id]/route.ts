@@ -3,7 +3,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { EntryModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 export async function GET(
   request: NextRequest,
@@ -60,10 +59,6 @@ export async function PUT(
     entry.lastModifiedBy = decodedToken.uid;
     await entry.save();
 
-    if (changes.length > 0) {
-      await logAudit('entry', id, 'update', decodedToken.uid, changes);
-    }
-
     return successResponse(entry, 'Entry updated successfully');
   } catch (error: any) {
     console.error('Entry update error:', error);
@@ -88,8 +83,6 @@ export async function DELETE(
 
     const entry = await EntryModel.findOneAndDelete({ _id: id, userId: decodedToken.uid });
     if (!entry) return notFoundResponse('Entry not found');
-
-    await logAudit('entry', id, 'delete', decodedToken.uid, []);
 
     return successResponse(null, 'Entry deleted successfully');
   } catch (error) {

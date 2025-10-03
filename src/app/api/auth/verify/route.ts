@@ -29,11 +29,6 @@ export async function POST(request: NextRequest) {
         displayName: decodedToken.name || decodedToken.email?.split('@')[0] || 'User',
         photoURL: decodedToken.picture,
         isGuest: false,
-        preferences: {
-          darkMode: false,
-          currency: 'PKR',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        },
         lastActive: new Date(),
       });
     } else {
@@ -41,17 +36,28 @@ export async function POST(request: NextRequest) {
       await user.save();
     }
 
-    return successResponse({
-      _id: user._id.toString(),
+    // Create response with user data
+    const response = successResponse({
+      _id: String(user._id),
       firebaseUid: user.firebaseUid,
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
       isGuest: user.isGuest,
-      preferences: user.preferences,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
+
+    // Set HTTP-only cookie with the Firebase token
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Auth verification error:', error);
     return serverErrorResponse();

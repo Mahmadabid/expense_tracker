@@ -3,7 +3,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { LoanModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 async function auth(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -100,17 +99,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     loan.lastModifiedBy = a.uid;
     await loan.save();
 
-    // Log the update
-    const changes = [];
-    if (amount !== undefined && amount !== oldAmount) {
-      changes.push({ field: 'payment_amount', oldValue: oldAmount, newValue: amount });
-      changes.push({ field: 'remaining_amount', oldValue: oldRemainingAmount, newValue: loan.remainingAmount });
-    }
-    
-    if (changes.length > 0) {
-      await logAudit('loan', String(loan._id), 'payment_updated', a.uid, changes);
-    }
-
     return successResponse(payment, 'Payment updated successfully');
   } catch (error: any) {
     console.error('Payment update error:', error);
@@ -151,12 +139,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     loan.payments.splice(paymentIndex, 1);
     loan.lastModifiedBy = a.uid;
     await loan.save();
-
-    // Log the deletion
-    await logAudit('loan', String(loan._id), 'payment_deleted', a.uid, [
-      { field: 'payment_amount', oldValue: payment.amount, newValue: null },
-      { field: 'remaining_amount', oldValue: loan.remainingAmount - payment.amount, newValue: loan.remainingAmount },
-    ]);
 
     return successResponse({ id: params.paymentId }, 'Payment deleted successfully');
   } catch (error: any) {

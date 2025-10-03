@@ -1,5 +1,6 @@
 import mongoose, { Schema, model, Document, Model } from 'mongoose';
-import { Entry, EntryType, EntryStatus, Currency } from '@/types';
+import { Entry, EntryType } from '@/types';
+import { encryptObject, decryptObject } from '@/lib/utils/encryption';
 
 interface EntryDocument extends Omit<Entry, '_id'>, Document {}
 
@@ -7,7 +8,7 @@ interface EntryModel extends Model<EntryDocument> {
   findByUserId(userId: string): Promise<EntryDocument[]>;
 }
 
-const EntrySchema = new Schema<EntryDocument>(
+const EntrySchema = new Schema(
   {
     userId: {
       type: String,
@@ -18,28 +19,17 @@ const EntrySchema = new Schema<EntryDocument>(
       required: true,
       enum: ['income', 'expense', 'loan'],
     },
-    amount: {
-      type: Number,
-      required: true,
-      min: [0, 'Amount must be positive'],
-      validate: {
-        validator: function(v: number) {
-          return Number.isFinite(v) && v >= 0;
-        },
-        message: 'Amount must be a valid positive number',
-      },
-    },
+    // Encrypted sensitive data stored as single string
+    encryptedData: String,
+    // Virtual fields that get populated from encryptedData
+    amount: Schema.Types.Mixed,
+    description: Schema.Types.Mixed,
+    // Keep indexable fields unencrypted for querying
     currency: {
       type: String,
       required: true,
       enum: ['PKR', 'USD', 'EUR', 'GBP', 'KWD', 'JPY', 'CAD', 'AUD', 'SAR', 'AED'],
       default: 'PKR',
-    },
-    description: {
-      type: String,
-      required: false,
-      trim: true,
-      maxlength: 500,
     },
     category: {
       type: String,
@@ -89,14 +79,56 @@ EntrySchema.index({ userId: 1, category: 1 });
 EntrySchema.index({ tags: 1 });
 EntrySchema.index({ createdAt: -1 });
 
-// Pre-save middleware
+// Pre-save middleware - Encrypt sensitive data
 EntrySchema.pre('save', function(next) {
-  if (this.isNew) {
-    this.version = 1;
-  } else if (this.isModified() && !this.isNew) {
-    this.version = (this.version || 1) + 1;
+  // Bundle sensitive data into encrypted field
+  const doc = this as any;
+  
+  // If we have amount and description as separate fields (for backwards compatibility or API input)
+  if (doc.amount !== undefined || doc.description !== undefined) {
+    const sensitiveData = {
+      amount: doc.amount,
+      description: doc.description || '',
+    };
+    
+    doc.encryptedData = encryptObject(sensitiveData);
+    
+    // Remove the plain fields so they don't get stored
+    delete doc.amount;
+    delete doc.description;
   }
+  
+  // Version management
+  if (this.isNew) {
+    (this as any).version = 1;
+  } else if (this.isModified() && !this.isNew) {
+    (this as any).version = ((this as any).version || 1) + 1;
+  }
+  
   next();
+});
+
+// Post-find middleware - Decrypt sensitive data
+function decryptEntryData(doc: any) {
+  if (doc && doc.encryptedData) {
+    const decrypted = decryptObject<{ amount: number; description?: string }>(doc.encryptedData);
+    if (decrypted) {
+      doc.amount = decrypted.amount;
+      doc.description = decrypted.description || '';
+    }
+  }
+}
+
+EntrySchema.post('find', function(docs: EntryDocument[]) {
+  docs.forEach(decryptEntryData);
+});
+
+EntrySchema.post('findOne', function(doc: EntryDocument | null) {
+  if (doc) decryptEntryData(doc);
+});
+
+EntrySchema.post('findOneAndUpdate', function(doc: EntryDocument | null) {
+  if (doc) decryptEntryData(doc);
 });
 
 // Methods

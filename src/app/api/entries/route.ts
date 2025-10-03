@@ -3,7 +3,6 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { EntryModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, errorResponse } from '@/lib/utils/apiResponse';
-import { logAudit } from '@/lib/utils/auditLogger';
 
 // GET /api/entries - List entries with filters
 export async function GET(request: NextRequest) {
@@ -76,11 +75,6 @@ export async function POST(request: NextRequest) {
       createdBy: userId,
       lastModifiedBy: userId,
     });
-
-    await logAudit('entry', String(entry._id), 'create', userId, [
-      { field: 'type', oldValue: null, newValue: type },
-      { field: 'amount', oldValue: null, newValue: amount },
-    ]);
 
     return successResponse(entry, 'Entry created successfully', 201);
   } catch (error: any) {
