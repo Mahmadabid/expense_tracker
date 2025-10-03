@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getAuthHeader } from '@/lib/firebase/auth';
 
@@ -19,12 +19,14 @@ export function NotificationBell() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Only fetch on initial mount, not repeatedly
+  // Guard to avoid duplicate fetch in React StrictMode (double mount in dev)
+  const fetchedOnceRef = useRef(false);
   useEffect(() => {
-    if (user && !user.isGuest) {
+    if (user && !user.isGuest && !fetchedOnceRef.current) {
+      fetchedOnceRef.current = true;
       fetchNotifications();
     }
-  }, [user]); // Only when user changes
+  }, [user]);
 
   const fetchNotifications = async () => {
     try {
@@ -61,7 +63,8 @@ export function NotificationBell() {
     setLoading(true);
     try {
       const authHeaders = await getAuthHeader();
-      await fetch('/api/notifications/mark-all-read', {
+      // Unified endpoint: POST /api/notifications now marks all as read
+      await fetch('/api/notifications', {
         method: 'POST',
         headers: authHeaders,
       });

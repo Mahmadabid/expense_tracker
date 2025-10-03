@@ -22,29 +22,34 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const userId = decodedToken.uid;
 
-    // Parallel fetch for performance (removed .lean() to allow decryption middleware)
+    // Fetch ALL active entries & loans for the user (no pagination)
     const [entries, loans] = await Promise.all([
-      EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }).limit(50),
-      LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }).limit(50),
+      EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }),
+      LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }),
     ]);
-console.log(loans)
     // Calculate summaries
     const totalIncome = entries.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
     const totalExpense = entries.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
     const totalLoaned = loans.filter((l: any) => l.direction === 'lent').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
     const totalBorrowed = loans.filter((l: any) => l.direction === 'borrowed').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
 
+    const balance = totalIncome - totalExpense;
+    const netLoan = totalLoaned - totalBorrowed; // positive means others owe user
+    const netWorth = balance + netLoan; // simplistic net worth metric
+
     return successResponse({
       summary: {
         totalIncome,
         totalExpense,
-        balance: totalIncome - totalExpense,
+        balance,
         totalLoaned,
         totalBorrowed,
-        netLoan: totalLoaned - totalBorrowed,
+        netLoan,
+        netWorth,
+        totalsScope: 'all-active',
       },
-      recentEntries: entries.slice(0, 10),
-      recentLoans: loans.slice(0, 10),
+      entries, // full arrays
+      loans,
     });
   } catch (error) {
     console.error('Dashboard fetch error:', error);
