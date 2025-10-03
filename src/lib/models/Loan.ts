@@ -1,11 +1,18 @@
 import mongoose, { Schema, model, Document, Model } from 'mongoose';
 import { Loan, LoanDirection, Payment, LoanCollaborator, PendingApproval } from '@/types';
 
-interface LoanDocument extends Omit<Loan, '_id'>, Document {}
+interface LoanDocument extends Omit<Loan, '_id'>, Document {
+  addPayment(payment: Omit<Payment, '_id' | 'createdAt'>): Payment;
+  getTotalPaid(): number;
+  canUserEdit(userId: string): boolean;
+  canUserAddPayment(userId: string): boolean;
+  requiresApproval(action: string, userId: string): boolean;
+}
 
 interface LoanModel extends Model<LoanDocument> {
   findByUserId(userId: string): Promise<LoanDocument[]>;
   findSharedLoans(userId: string): Promise<LoanDocument[]>;
+  findByCounterparty(userId: string, counterpartyUserId: string): Promise<LoanDocument[]>;
 }
 
 const PaymentSchema = new Schema<Payment>({
@@ -35,6 +42,26 @@ const PaymentSchema = new Schema<Payment>({
   version: {
     type: Number,
     default: 1,
+  },
+}, {
+  timestamps: true,
+  _id: true,
+});
+
+const LoanCommentSchema = new Schema({
+  userId: {
+    type: String,
+    required: true,
+  },
+  userName: {
+    type: String,
+    required: true,
+  },
+  message: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 1000,
   },
 }, {
   timestamps: true,
@@ -137,7 +164,7 @@ const LoanSchema = new Schema<LoanDocument>(
     },
     description: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       maxlength: 500,
     },
@@ -217,17 +244,14 @@ const LoanSchema = new Schema<LoanDocument>(
     dueDate: {
       type: Date,
     },
-    interestRate: {
-      type: Number,
-      min: [0, 'Interest rate must be non-negative'],
-      max: [100, 'Interest rate cannot exceed 100%'],
-    },
     payments: [PaymentSchema],
+    comments: [LoanCommentSchema],
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
     shareToken: {
       type: String,
       sparse: true,
+      unique: true,
     },
   },
   {
@@ -242,7 +266,6 @@ LoanSchema.index({ userId: 1, status: 1 });
 LoanSchema.index({ 'counterparty.userId': 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
 LoanSchema.index({ dueDate: 1 });
-LoanSchema.index({ shareToken: 1 }, { sparse: true });
 
 // Pre-save middleware
 LoanSchema.pre('save', function(next) {
@@ -293,6 +316,15 @@ LoanSchema.methods.canUserEdit = function(userId: string) {
          (collaborator.role === 'owner' || collaborator.role === 'collaborator');
 };
 
+LoanSchema.methods.canUserAddPayment = function(userId: string) {
+  // Loan owner, counterparty, or accepted collaborators can add payments
+  if (this.userId === userId) return true;
+  if (this.counterparty?.userId === userId) return true;
+  
+  const collaborator = this.collaborators.find((c: LoanCollaborator) => c.userId === userId);
+  return collaborator && collaborator.status === 'accepted';
+};
+
 LoanSchema.methods.requiresApproval = function(action: string, userId: string) {
   const destructiveActions = ['delete', 'close'];
   return destructiveActions.includes(action) && this.collaborators.length > 0;
@@ -304,6 +336,7 @@ LoanSchema.statics.findByUserId = function(userId: string) {
     $or: [
       { userId },
       { 'collaborators.userId': userId },
+      { 'counterparty.userId': userId },
     ],
   });
 };

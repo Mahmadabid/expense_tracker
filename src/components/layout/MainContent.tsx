@@ -23,11 +23,12 @@ export function MainContent() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ amount: '', description: '', category: '' });
+  const [formData, setFormData] = useState({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const closeModal = () => {
     setModalType(null);
-    setFormData({ amount: '', description: '', category: '' });
+    setFormData({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
   };
 
   useEffect(() => {
@@ -56,33 +57,69 @@ export function MainContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.amount || !formData.description || submitting) return;
+    setErrorMessage(null);
+    if (!modalType) {
+      setErrorMessage('No entry type selected.');
+      return;
+    }
+    const isLoan = modalType === 'loan';
+    if (isLoan) {
+      if (!formData.counterpartyName) {
+        setErrorMessage('Counterparty name is required for a loan.');
+        return;
+      }
+    }
+    if (!formData.amount) {
+      setErrorMessage('Amount is required.');
+      return;
+    }
+    const amt = parseFloat(formData.amount);
+    if (isNaN(amt) || amt <= 0) {
+      setErrorMessage('Amount must be a positive number.');
+      return;
+    }
+    if (submitting) return;
 
     setSubmitting(true);
     try {
       const token = localStorage.getItem('firebaseToken');
-      const res = await fetch('/api/entries', {
+      const endpoint = isLoan ? '/api/loans' : '/api/entries';
+      const payload: any = isLoan ? {
+        amount: amt,
+        currency: localStorage.getItem('currency') || 'PKR',
+        description: formData.description || undefined,
+        direction: formData.direction,
+        counterparty: { name: formData.counterpartyName, email: formData.counterpartyEmail || undefined },
+        dueDate: formData.dueDate || undefined,
+        tags: [],
+      } : {
+        type: modalType,
+        amount: amt,
+        currency: localStorage.getItem('currency') || 'PKR',
+        description: formData.description || undefined,
+        category: formData.category || undefined,
+        date: new Date().toISOString(),
+      };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          type: modalType,
-          amount: parseFloat(formData.amount),
-          currency: localStorage.getItem('currency') || 'PKR',
-          description: formData.description,
-          category: formData.category || undefined,
-          date: new Date().toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
         closeModal();
         fetchDashboardData(); // Refresh data
+      } else {
+        const data = await res.json().catch(() => null);
+        setErrorMessage(data?.message || 'Failed to create entry');
       }
     } catch (err) {
       console.error('Failed to create entry:', err);
+      setErrorMessage('Network error while creating entry');
     } finally {
       setSubmitting(false);
     }
@@ -193,19 +230,67 @@ export function MainContent() {
           <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-lg p-4 sm:p-6">
             <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 capitalize text-gray-900 dark:text-white/80">Add {modalType}</h4>
             <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit}>
+              {errorMessage && (
+                <div className="text-xs sm:text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded px-2 py-1.5">
+                  {errorMessage}
+                </div>
+              )}
               <div>
                 <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Amount</label>
-                <input type="number" step="0.01" required value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm" />
+                <input type="number" step="0.01" required value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
               </div>
               <div>
-                <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
-                <input type="text" required value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm" />
+                <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description (optional)</label>
+                <input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
               </div>
               {modalType !== 'loan' && (
                 <div>
                   <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Category (optional)</label>
-                  <input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm" />
+                  <input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
                 </div>
+              )}
+              {modalType === 'loan' && (
+                <>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Loan Type</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="direction" 
+                          value="lent" 
+                          checked={formData.direction === 'lent'}
+                          onChange={(e) => setFormData({...formData, direction: e.target.value})}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <span className="ml-2 text-sm text-gray-900 dark:text-gray-300">I Lent (They owe me)</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="direction" 
+                          value="borrowed" 
+                          checked={formData.direction === 'borrowed'}
+                          onChange={(e) => setFormData({...formData, direction: e.target.value})}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <span className="ml-2 text-sm text-gray-900 dark:text-gray-300">I Borrowed (I owe them)</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Counterparty Name</label>
+                    <input type="text" required value={formData.counterpartyName} onChange={(e) => setFormData({...formData, counterpartyName: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Counterparty Email (optional)</label>
+                    <input type="email" value={formData.counterpartyEmail} onChange={(e) => setFormData({...formData, counterpartyEmail: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Due Date (optional)</label>
+                    <input type="date" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-0 focus:border-blue-500 dark:focus:border-blue-400" />
+                  </div>
+                </>
               )}
               <div className="flex justify-end space-x-2 pt-2">
                 <button type="button" onClick={closeModal} disabled={submitting} className="cursor-pointer px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>

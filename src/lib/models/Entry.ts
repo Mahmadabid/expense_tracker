@@ -37,7 +37,7 @@ const EntrySchema = new Schema<EntryDocument>(
     },
     description: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       maxlength: 500,
     },

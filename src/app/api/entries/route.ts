@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { type, amount, currency, description, category, date, tags } = body;
 
-    if (!type || !amount || !currency || !description) {
-      return errorResponse('Missing required fields: type, amount, currency, description');
+    if (!type || !amount || !currency) {
+      return errorResponse('Missing required fields: type, amount, currency');
     }
 
     if (!['income', 'expense'].includes(type)) {

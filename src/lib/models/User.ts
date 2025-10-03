@@ -67,6 +67,7 @@ const UserSchema = new Schema<UserDocument>(
     guestToken: {
       type: String,
       sparse: true,
+      unique: true,
     },
     preferences: {
       darkMode: { type: Boolean, default: false },
@@ -89,9 +90,6 @@ const UserSchema = new Schema<UserDocument>(
 );
 
 // Indexes
-UserSchema.index({ email: 1 });
-UserSchema.index({ firebaseUid: 1 });
-UserSchema.index({ guestToken: 1 }, { sparse: true });
 UserSchema.index({ lastActive: 1 });
 
 // Pre-save middleware

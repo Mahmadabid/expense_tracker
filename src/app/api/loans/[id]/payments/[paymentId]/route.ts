@@ -1,0 +1,166 @@
+import { NextRequest } from 'next/server';
+import { verifyIdToken } from '@/lib/firebase/admin';
+import { connectDB } from '@/lib/db/mongodb';
+import { LoanModel } from '@/lib/models';
+import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
+import { logAudit } from '@/lib/utils/auditLogger';
+
+async function auth(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.replace('Bearer ', '');
+  if (!token) return { error: unauthorizedResponse('No token provided') };
+  const decoded = await verifyIdToken(token);
+  if (!decoded) return { error: unauthorizedResponse('Invalid token') };
+  return { uid: decoded.uid };
+}
+
+// GET /api/loans/:id/payments/:paymentId - Get specific payment
+export async function GET(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+  try {
+    const a = await auth(request); if ('error' in a) return a.error;
+    await connectDB();
+
+    const loan = await LoanModel.findById(params.id).lean();
+    if (!loan) return notFoundResponse('Loan not found');
+
+    // Check access permissions
+    const hasAccess = loan.userId === a.uid || 
+                     loan.counterparty?.userId === a.uid ||
+                     loan.collaborators?.some(c => c.userId === a.uid);
+    
+    if (!hasAccess) {
+      return unauthorizedResponse('Access denied');
+    }
+
+    const payment = loan.payments?.find(p => p._id.toString() === params.paymentId);
+    if (!payment) return notFoundResponse('Payment not found');
+
+    return successResponse(payment);
+  } catch (error: any) {
+    console.error('Payment fetch error:', error);
+    return serverErrorResponse(error?.message || 'Failed to fetch payment');
+  }
+}
+
+// PUT /api/loans/:id/payments/:paymentId - Update payment
+export async function PUT(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+  try {
+    const a = await auth(request); if ('error' in a) return a.error;
+    await connectDB();
+
+    const loan = await LoanModel.findById(params.id);
+    if (!loan) return notFoundResponse('Loan not found');
+
+    const payment = loan.payments?.find(p => p._id.toString() === params.paymentId);
+    if (!payment) return notFoundResponse('Payment not found');
+
+    // Only the person who made the payment or loan owner can edit it
+    if (payment.paidBy !== a.uid && loan.userId !== a.uid) {
+      return unauthorizedResponse('Not authorized to edit this payment');
+    }
+
+    const body = await request.json();
+    const { amount, date, method, notes } = body;
+
+    // Store old values for audit
+    const oldAmount = payment.amount;
+    const oldRemainingAmount = loan.remainingAmount;
+
+    // Validate new amount
+    if (amount !== undefined) {
+      if (amount <= 0) {
+        return errorResponse('Payment amount must be positive');
+      }
+      
+      // Calculate what the remaining amount would be
+      const amountDifference = amount - payment.amount;
+      const newRemainingAmount = loan.remainingAmount + amountDifference;
+      
+      if (newRemainingAmount < 0) {
+        return errorResponse('Updated payment amount would exceed the loan amount');
+      }
+      
+      payment.amount = amount;
+      loan.remainingAmount = newRemainingAmount;
+    }
+
+    if (date !== undefined) payment.date = new Date(date);
+    if (method !== undefined) payment.method = method;
+    if (notes !== undefined) payment.notes = notes;
+
+    payment.version = (payment.version || 1) + 1;
+
+    // Update loan status if needed
+    if (loan.remainingAmount === 0 && loan.status !== 'paid') {
+      loan.status = 'paid';
+    } else if (loan.remainingAmount > 0 && loan.status === 'paid') {
+      loan.status = 'active';
+    }
+
+    loan.lastModifiedBy = a.uid;
+    await loan.save();
+
+    // Log the update
+    const changes = [];
+    if (amount !== undefined && amount !== oldAmount) {
+      changes.push({ field: 'payment_amount', oldValue: oldAmount, newValue: amount });
+      changes.push({ field: 'remaining_amount', oldValue: oldRemainingAmount, newValue: loan.remainingAmount });
+    }
+    
+    if (changes.length > 0) {
+      await logAudit('loan', String(loan._id), 'payment_updated', a.uid, changes);
+    }
+
+    return successResponse(payment, 'Payment updated successfully');
+  } catch (error: any) {
+    console.error('Payment update error:', error);
+    return serverErrorResponse(error?.message || 'Failed to update payment');
+  }
+}
+
+// DELETE /api/loans/:id/payments/:paymentId - Delete payment
+export async function DELETE(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+  try {
+    const a = await auth(request); if ('error' in a) return a.error;
+    await connectDB();
+
+    const loan = await LoanModel.findById(params.id);
+    if (!loan) return notFoundResponse('Loan not found');
+
+    const paymentIndex = loan.payments?.findIndex(p => p._id.toString() === params.paymentId);
+    if (paymentIndex === undefined || paymentIndex === -1) {
+      return notFoundResponse('Payment not found');
+    }
+
+    const payment = loan.payments[paymentIndex];
+
+    // Only the person who made the payment or loan owner can delete it
+    if (payment.paidBy !== a.uid && loan.userId !== a.uid) {
+      return unauthorizedResponse('Not authorized to delete this payment');
+    }
+
+    // Restore the amount to remaining balance
+    loan.remainingAmount += payment.amount;
+    
+    // Update status if needed
+    if (loan.status === 'paid' && loan.remainingAmount > 0) {
+      loan.status = 'active';
+    }
+
+    // Remove the payment
+    loan.payments.splice(paymentIndex, 1);
+    loan.lastModifiedBy = a.uid;
+    await loan.save();
+
+    // Log the deletion
+    await logAudit('loan', String(loan._id), 'payment_deleted', a.uid, [
+      { field: 'payment_amount', oldValue: payment.amount, newValue: null },
+      { field: 'remaining_amount', oldValue: loan.remainingAmount - payment.amount, newValue: loan.remainingAmount },
+    ]);
+
+    return successResponse({ id: params.paymentId }, 'Payment deleted successfully');
+  } catch (error: any) {
+    console.error('Payment deletion error:', error);
+    return serverErrorResponse(error?.message || 'Failed to delete payment');
+  }
+}

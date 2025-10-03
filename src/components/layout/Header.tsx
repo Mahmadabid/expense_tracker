@@ -55,21 +55,18 @@ export function Header() {
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white/80 hidden sm:block">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <h1 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white/80">
               Expense Tracker
-            </h1>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white/80 sm:hidden">
-              Expense
             </h1>
             {/* Currency Selector */}
             <div className="relative">
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="cursor-pointer appearance-none bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-sm rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="cursor-pointer appearance-none bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-sm rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-0 focus:border-blue-500"
                 aria-label="Select currency"
               >
                 {SUPPORTED_CURRENCIES.map(cur => (
@@ -80,11 +77,11 @@ export function Header() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4">
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="cursor-pointer p-1.5 sm:p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="cursor-pointer p-1.5 sm:p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
               aria-label="Toggle theme"
             >
               {isDark ? (
@@ -100,28 +97,28 @@ export function Header() {
 
             {/* User Menu */}
             {user ? (
-              <div className="flex items-center space-x-2 sm:space-x-3">
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hidden md:inline">
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <span className="text-xs text-gray-700 dark:text-gray-300 hidden lg:inline truncate max-w-[100px]">
                   {user.isGuest ? 'Guest' : user.displayName || user.email}
                 </span>
                 <button
                   onClick={signOut}
-                  className="cursor-pointer bg-red-600 hover:bg-red-700 text-white px-2 py-1.5 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
+                  className="cursor-pointer bg-red-600 hover:bg-red-700 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
                 >
                   Sign Out
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1">
                 <button
                   onClick={signInAsGuest}
-                  className="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-900 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 hidden sm:inline"
+                  className="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-900 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium transition-colors dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 hidden sm:inline whitespace-nowrap"
                 >
                   Guest
                 </button>
                 <button
                   onClick={signIn}
-                  className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
+                  className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
                 >
                   Sign In
                 </button>

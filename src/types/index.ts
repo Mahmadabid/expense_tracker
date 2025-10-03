@@ -26,7 +26,7 @@ export interface Entry {
   type: EntryType;
   amount: number;
   currency: Currency;
-  description: string;
+  description?: string;
   category?: string;
   date: Date;
   status: EntryStatus;
@@ -50,8 +50,8 @@ export interface Loan extends Entry {
   originalAmount: number;
   remainingAmount: number;
   dueDate?: Date;
-  interestRate?: number;
   payments: Payment[];
+  comments: LoanComment[];
   collaborators: LoanCollaborator[];
   pendingApprovals: PendingApproval[];
   shareToken?: string; // For non-registered counterparty access
@@ -66,6 +66,15 @@ export interface Payment {
   paidBy: string; // userId
   createdAt: Date;
   version: number;
+}
+
+export interface LoanComment {
+  _id: string;
+  userId: string;
+  userName: string;
+  message: string;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 export type CollaboratorRole = 'owner' | 'collaborator' | 'viewer';
@@ -193,7 +202,6 @@ export interface CreateLoanRequest extends CreateEntryRequest {
     phone?: string;
   };
   dueDate?: Date;
-  interestRate?: number;
 }
 
 export interface AddPaymentRequest {
