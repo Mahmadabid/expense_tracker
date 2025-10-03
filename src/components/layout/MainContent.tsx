@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getAuthHeader } from '@/lib/firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { convertCurrency, type Currency } from '@/lib/utils/currencyConversion';
+
+// Constants moved outside component to prevent infinite loop
+const SUPPORTED_CURRENCIES = ['PKR', 'KWD', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'JPY'] as const;
+const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
+const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Business', 'Investment', 'Gift', 'Other'];
 
 interface DashboardData {
   summary: {
@@ -99,7 +105,7 @@ function Button({
 }
 
 // Compact Entry Card
-function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => void; currency: string }) {
+function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -156,7 +162,7 @@ function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => 
             </h4>
             <span className={`text-sm sm:text-base font-bold whitespace-nowrap ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
               }`}>
-              {isIncome ? '+' : '-'}{currency} {entry.amount?.toFixed(2)}
+              {isIncome ? '+' : '-'}{entry.currency || 'PKR'} {entry.amount?.toFixed(2)}
             </span>
           </div>
 
@@ -210,7 +216,7 @@ function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => 
 }
 
 // Responsive Loan Card - Payments button on separate line
-function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => void; currency: string }) {
+function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
@@ -218,6 +224,8 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
   const [paymentDescription, setPaymentDescription] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [processing, setProcessing] = useState(false);
+  
+  const loanCurrency = loan.currency || 'PKR';
 
   const handleAddPayment = async () => {
     const amt = parseFloat(paymentAmount);
@@ -379,7 +387,7 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
                     <span>{progress.toFixed(0)}% Repaid</span>
                     <span className="tabular-nums text-xs">
-                      {currency} {(loan.amount - loan.remainingAmount).toFixed(2)} / {loan.amount.toFixed(2)}
+                      {loanCurrency} {(loan.amount - loan.remainingAmount).toFixed(2)} / {loan.amount.toFixed(2)}
                     </span>
                   </div>
                   <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -398,7 +406,7 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
                 </p>
                 <p className={`text-lg sm:text-xl font-bold tabular-nums ${isLent ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
                   }`}>
-                  {currency} {loan.remainingAmount?.toFixed(2)}
+                  {loanCurrency} {loan.remainingAmount?.toFixed(2)}
                 </p>
               </div>
 
@@ -436,7 +444,7 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
                     <div key={idx} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                       <div className="flex-1 min-w-0 pr-3">
                         <p className="font-semibold text-sm text-gray-900 dark:text-white mb-1 tabular-nums">
-                          {currency} {payment.amount?.toFixed(2)}
+                          {loanCurrency} {payment.amount?.toFixed(2)}
                         </p>
                         {payment.description && (
                           <p className="text-gray-500 dark:text-gray-400 truncate text-xs">{payment.description}</p>
@@ -518,13 +526,14 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
                   Payment Amount
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  Maximum: {currency} {loan.remainingAmount?.toFixed(2)}
+                  Maximum: {loanCurrency} {loan.remainingAmount?.toFixed(2)}
                 </p>
                 <input
                   type="number"
                   step="0.01"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
+                  onWheel={(e) => e.currentTarget.blur()}
                   className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   placeholder="0.00"
                   autoFocus
@@ -642,22 +651,48 @@ export function MainContent() {
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PKR');
+  const [previousCurrency, setPreviousCurrency] = useState('PKR');
+  const [isConverting, setIsConverting] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'income' | 'expense' | 'loans'>('all');
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-
-  const SUPPORTED_CURRENCIES = ['PKR', 'KWD', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'JPY'] as const;
-  const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
-  const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Business', 'Investment', 'Gift', 'Other'];
+  const [currencyFilter, setCurrencyFilter] = useState<string>('all');
 
   const closeModal = () => {
     setModalType(null);
     setFormData({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
     setErrorMessage(null);
     setTransactionType('expense');
+    setPreviousCurrency(currency);
+  };
+
+  // Handle currency change with automatic conversion
+  const handleCurrencyChange = async (newCurrency: string) => {
+    const currentAmount = parseFloat(formData.amount);
+    
+    // If there's a valid amount, convert it
+    if (!isNaN(currentAmount) && currentAmount > 0 && previousCurrency !== newCurrency) {
+      setIsConverting(true);
+      try {
+        const convertedAmount = await convertCurrency(
+          currentAmount,
+          previousCurrency as Currency,
+          newCurrency as Currency
+        );
+        setFormData({ ...formData, amount: convertedAmount.toFixed(2) });
+      } catch (error) {
+        console.error('Currency conversion failed:', error);
+        // Don't convert if API fails, just change currency
+      } finally {
+        setIsConverting(false);
+      }
+    }
+    
+    setCurrency(newCurrency);
+    setPreviousCurrency(newCurrency);
   };
 
   useEffect(() => {
@@ -672,13 +707,52 @@ export function MainContent() {
 
     if (stored && SUPPORTED_CURRENCIES.includes(stored as SupportedCurrency)) {
       setCurrency(stored as SupportedCurrency);
+      setPreviousCurrency(stored as SupportedCurrency);
     }
     
-  }, [SUPPORTED_CURRENCIES]);
+  }, []); // Empty dependency - only run once on mount
 
   useEffect(() => {
     localStorage.setItem('currency', currency);
   }, [currency]);
+
+  // Normalize and validate currencies from API
+  const normalizeCurrencies = (data: DashboardData): DashboardData => {
+    const validateCurrency = (curr: string) => 
+      SUPPORTED_CURRENCIES.includes(curr as any) ? curr : 'PKR';
+    
+    const normalizedData = { ...data };
+    
+    if (normalizedData.entries) {
+      normalizedData.entries = normalizedData.entries.map((e: any) => ({
+        ...e,
+        currency: validateCurrency(e.currency)
+      }));
+    }
+    
+    if (normalizedData.recentEntries) {
+      normalizedData.recentEntries = normalizedData.recentEntries.map((e: any) => ({
+        ...e,
+        currency: validateCurrency(e.currency)
+      }));
+    }
+    
+    if (normalizedData.loans) {
+      normalizedData.loans = normalizedData.loans.map((l: any) => ({
+        ...l,
+        currency: validateCurrency(l.currency)
+      }));
+    }
+    
+    if (normalizedData.recentLoans) {
+      normalizedData.recentLoans = normalizedData.recentLoans.map((l: any) => ({
+        ...l,
+        currency: validateCurrency(l.currency)
+      }));
+    }
+    
+    return normalizedData;
+  };
 
   const fetchDashboardData = async () => {
     setDataLoading(true);
@@ -687,7 +761,8 @@ export function MainContent() {
       const res = await fetch('/api/dashboard', { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
-        setDashboardData(data.data);
+        const normalizedData = normalizeCurrencies(data.data);
+        setDashboardData(normalizedData);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
@@ -756,6 +831,11 @@ export function MainContent() {
           item.counterparty?.name?.toLowerCase().includes(searchLower)
         );
       });
+    }
+
+    // Currency filter
+    if (currencyFilter && currencyFilter !== 'all') {
+      combined = combined.filter((item: any) => item.currency === currencyFilter);
     }
 
     if (dateRange.start) {
@@ -1109,7 +1189,20 @@ export function MainContent() {
           </div>
 
           {showFilters && (
-            <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3">
+              <div>
+                <label className="block text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Currency</label>
+                <select
+                  value={currencyFilter}
+                  onChange={(e) => setCurrencyFilter(e.target.value)}
+                  className="cursor-pointer w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Currencies</option>
+                  {SUPPORTED_CURRENCIES.map(curr => (
+                    <option key={curr} value={curr}>{curr}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Start Date</label>
                 <input
@@ -1173,9 +1266,9 @@ export function MainContent() {
               <div className="space-y-3 sm:space-y-4">
                 {getFilteredActivity().map((item: any) => (
                   item.isLoan ? (
-                    <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} currency={currency} />
+                    <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} />
                   ) : (
-                    <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} currency={currency} />
+                    <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} />
                   )
                 ))}
               </div>
@@ -1308,22 +1401,44 @@ export function MainContent() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium text-sm sm:text-base">
-                    {currency}
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    className="w-full pl-16 sm:pl-20 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base sm:text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                    placeholder="0.00"
-                    autoFocus
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium text-sm sm:text-base">
+                      {currency}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="w-full pl-16 sm:pl-20 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base sm:text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">
+                    Currency {isConverting && <span className="text-xs text-blue-600 dark:text-blue-400">(Converting...)</span>}
+                  </label>
+                  <select
+                    value={currency}
+                    onChange={(e) => handleCurrencyChange(e.target.value)}
+                    disabled={isConverting}
+                    className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-medium text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all disabled:opacity-50"
+                  >
+                    {SUPPORTED_CURRENCIES.map(curr => (
+                      <option key={curr} value={curr}>{curr}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Amount will auto-convert when you change currency
+                  </p>
                 </div>
               </div>
 

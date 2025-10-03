@@ -207,6 +207,12 @@ const LoanSchema = new Schema(
     dueDate: {
       type: Date,
     },
+    // Store counterparty userId at top level for querying
+    // The full counterparty object (with email, phone, etc) is in encryptedData
+    counterpartyUserId: {
+      type: String,
+      sparse: true, // Allow null/undefined
+    },
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
     shareToken: {
@@ -227,6 +233,7 @@ const LoanSchema = new Schema(
 LoanSchema.index({ userId: 1, direction: 1 });
 LoanSchema.index({ userId: 1, status: 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
+LoanSchema.index({ counterpartyUserId: 1 }); // For counterparty to find their loans
 LoanSchema.index({ dueDate: 1 });
 
 // Pre-save middleware - Encrypt sensitive data BEFORE Mongoose processes it
