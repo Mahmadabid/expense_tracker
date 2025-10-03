@@ -15,9 +15,10 @@ async function auth(request: NextRequest) {
 }
 
 // GET /api/loans/:id/comments - Get all comments for a loan
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -40,9 +41,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // POST /api/loans/:id/comments - Add a comment to a loan
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);

@@ -1,5 +1,5 @@
 import mongoose, { Schema, model, Document, Model } from 'mongoose';
-import { Loan, LoanDirection, Payment, LoanCollaborator, PendingApproval } from '@/types';
+import { Loan, Payment, LoanCollaborator, PendingApproval } from '@/types';
 import { encryptObject, decryptObject } from '@/lib/utils/encryption';
 
 interface LoanDocument extends Omit<Loan, '_id'>, Document {

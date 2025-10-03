@@ -6,9 +6,10 @@ import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundRes
 import mongoose from 'mongoose';
 
 // Unified action POST: addPayment, addComment
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
@@ -88,9 +89,10 @@ async function auth(request: NextRequest) {
 }
 
 // GET /api/loans/:id
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
     // Remove .lean() to allow decryption middleware
     const loan = await LoanModel.findById(params.id);
@@ -109,9 +111,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT /api/loans/:id
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -165,9 +168,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/loans/:id (hard delete for now)
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');

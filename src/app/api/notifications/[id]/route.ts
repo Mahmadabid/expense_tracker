@@ -14,9 +14,10 @@ async function auth(request: NextRequest) {
 }
 
 // PUT /api/notifications/:id - Mark as read
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const notification = await NotificationModel.findOne({ _id: params.id, userId: a.uid });
@@ -35,9 +36,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/notifications/:id
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const result = await NotificationModel.deleteOne({ _id: params.id, userId: a.uid });

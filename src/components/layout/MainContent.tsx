@@ -134,8 +134,8 @@ function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => 
       <div className="flex items-center gap-2 sm:gap-3 pl-2">
         {/* Icon */}
         <div className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${isIncome
-            ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-            : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+          : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
           }`}>
           {isIncome ? (
             <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -313,16 +313,15 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
       <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 relative overflow-hidden">
         {/* Side indicator */}
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLent ? 'bg-blue-500' : 'bg-orange-500'}`} />
-        
+
         <div className="pl-2">
           {/* Header: Icon + Name + Menu - Single row on mobile */}
           <div className="flex items-center gap-2 sm:gap-3 mb-3">
             {/* Icon - Smaller on mobile */}
-            <div className={`flex-shrink-0 w-9 h-9 min-[450px]:w-12 min-[450px]:h-12 rounded-lg flex items-center justify-center ${
-              isLent
+            <div className={`flex-shrink-0 w-9 h-9 min-[450px]:w-12 min-[450px]:h-12 rounded-lg flex items-center justify-center ${isLent
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
                 : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-            }`}>
+              }`}>
               <svg className="w-4 h-4 min-[450px]:w-6 min-[450px]:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
               </svg>
@@ -353,18 +352,16 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
             <div className="flex-1 min-w-0">
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  isLent
+                <span className={`px-2 py-1 rounded text-xs font-medium ${isLent
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                     : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
-                }`}>
+                  }`}>
                   {isLent ? 'Lent' : 'Borrowed'}
                 </span>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  loan.status === 'active'
+                <span className={`px-2 py-1 rounded text-xs font-medium ${loan.status === 'active'
                     ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
                     : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                }`}>
+                  }`}>
                   {loan.status === 'active' ? 'Active' : 'Paid'}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
@@ -399,9 +396,8 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wide">
                   Remaining Amount
                 </p>
-                <p className={`text-lg sm:text-xl font-bold tabular-nums ${
-                  isLent ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
-                }`}>
+                <p className={`text-lg sm:text-xl font-bold tabular-nums ${isLent ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
+                  }`}>
                   {currency} {loan.remainingAmount?.toFixed(2)}
                 </p>
               </div>
@@ -431,7 +427,7 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
               <div className="flex flex-col min-[450px]:flex-row min-[450px]:gap-3">
                 {/* Left spacer for alignment on desktop */}
                 <div className="hidden min-[450px]:block min-[450px]:w-12 flex-shrink-0"></div>
-                
+
                 <div className="flex-1 min-w-0 space-y-2">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                     Payment History
@@ -672,10 +668,13 @@ export function MainContent() {
 
   useEffect(() => {
     const stored = localStorage.getItem('currency');
-    if (stored && SUPPORTED_CURRENCIES.includes(stored as any)) {
-      setCurrency(stored);
+    type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
+
+    if (stored && SUPPORTED_CURRENCIES.includes(stored as SupportedCurrency)) {
+      setCurrency(stored as SupportedCurrency);
     }
-  }, []);
+    
+  }, [SUPPORTED_CURRENCIES]);
 
   useEffect(() => {
     localStorage.setItem('currency', currency);
@@ -878,7 +877,7 @@ export function MainContent() {
         const data = await res.json().catch(() => null);
         setErrorMessage(data?.message || 'Failed to create entry');
       }
-    } catch (err) {
+    } catch {
       setErrorMessage('Network error occurred');
     } finally {
       setSubmitting(false);
@@ -1154,8 +1153,8 @@ export function MainContent() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`cursor-pointer flex-1 sm:min-w-[90px] px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-sm font-medium capitalize transition-all whitespace-nowrap ${activeTab === tab
-                      ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-gray-800'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-gray-800'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50'
                     }`}
                 >
                   {tab}
@@ -1289,8 +1288,8 @@ export function MainContent() {
                       type="button"
                       onClick={() => setTransactionType('expense')}
                       className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${transactionType === 'expense'
-                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                        ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                         }`}
                     >
                       <div className="text-sm sm:text-base font-semibold">Expense</div>
@@ -1299,8 +1298,8 @@ export function MainContent() {
                       type="button"
                       onClick={() => setTransactionType('income')}
                       className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${transactionType === 'income'
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                         }`}
                     >
                       <div className="text-sm sm:text-base font-semibold">Income</div>
@@ -1364,8 +1363,8 @@ export function MainContent() {
                         type="button"
                         onClick={() => setFormData({ ...formData, direction: 'lent' })}
                         className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${formData.direction === 'lent'
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                           }`}
                       >
                         <div className="text-sm sm:text-base font-semibold mb-0.5 sm:mb-1">I Lent</div>
@@ -1375,8 +1374,8 @@ export function MainContent() {
                         type="button"
                         onClick={() => setFormData({ ...formData, direction: 'borrowed' })}
                         className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${formData.direction === 'borrowed'
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
-                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
+                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                           }`}
                       >
                         <div className="text-sm sm:text-base font-semibold mb-0.5 sm:mb-1">I Borrowed</div>

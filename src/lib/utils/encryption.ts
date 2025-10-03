@@ -3,7 +3,6 @@ import crypto from 'crypto';
 // Encryption configuration
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16; // For AES, this is always 16
-const AUTH_TAG_LENGTH = 16;
 const ENCRYPTION_KEY_LENGTH = 32; // 256 bits
 
 // Get encryption key from environment or generate one for development

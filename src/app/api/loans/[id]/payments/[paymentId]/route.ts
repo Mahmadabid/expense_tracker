@@ -14,9 +14,10 @@ async function auth(request: NextRequest) {
 }
 
 // GET /api/loans/:id/payments/:paymentId - Get specific payment
-export async function GET(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string; paymentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -42,9 +43,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT /api/loans/:id/payments/:paymentId - Update payment
-export async function PUT(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string; paymentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -60,10 +62,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const body = await request.json();
     const { amount, date, method, notes } = body;
-
-    // Store old values for audit
-    const oldAmount = payment.amount;
-    const oldRemainingAmount = loan.remainingAmount;
 
     // Validate new amount
     if (amount !== undefined) {
@@ -107,9 +105,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/loans/:id/payments/:paymentId - Delete payment
-export async function DELETE(request: NextRequest, { params }: { params: { id: string; paymentId: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string; paymentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);

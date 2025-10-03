@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { UserModel } from '@/lib/models';

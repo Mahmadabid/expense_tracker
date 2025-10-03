@@ -14,9 +14,10 @@ async function auth(request: NextRequest) {
 }
 
 // GET /api/loans/:id/comments/:commentId - Get specific comment
-export async function GET(request: NextRequest, { params }: { params: { id: string; commentId: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string; commentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -42,9 +43,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT /api/loans/:id/comments/:commentId - Update comment
-export async function PUT(request: NextRequest, { params }: { params: { id: string; commentId: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string; commentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
@@ -84,9 +86,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/loans/:id/comments/:commentId - Delete comment
-export async function DELETE(request: NextRequest, { params }: { params: { id: string; commentId: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string; commentId: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const params = await context.params;
     await connectDB();
 
     const loan = await LoanModel.findById(params.id);
