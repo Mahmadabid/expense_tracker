@@ -41,19 +41,19 @@ function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => 
   };
 
   return (
-    <div className="group relative flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
+    <div className="group relative flex items-center gap-3 p-2.5 sm:p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
       {/* Icon */}
-      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+      <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
         entry.type === 'income' 
           ? 'bg-green-100 dark:bg-green-900/30' 
           : 'bg-red-100 dark:bg-red-900/30'
       }`}>
         {entry.type === 'income' ? (
-          <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         ) : (
-          <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
           </svg>
         )}
@@ -190,14 +190,14 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
     <>
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         {/* Main Loan Info */}
-        <div className="group relative flex items-center gap-3 p-3 hover:shadow-md transition-all">
+        <div className="group relative flex items-center gap-3 p-2.5 sm:p-3 hover:shadow-md transition-all">
           {/* Icon */}
-          <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+          <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
             loan.direction === 'lent' 
               ? 'bg-blue-100 dark:bg-blue-900/30' 
               : 'bg-orange-100 dark:bg-orange-900/30'
           }`}>
-            <svg className={`w-5 h-5 ${loan.direction === 'lent' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${loan.direction === 'lent' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
             </svg>
           </div>
@@ -240,7 +240,7 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
             <div className="relative">
               <button 
                 onClick={() => setShowActions(!showActions)}
-                className="cursor-pointer opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-opacity"
+                className="cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-opacity"
               >
                 <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -633,10 +633,10 @@ export function MainContent() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
                 {user.isGuest ? 'Guest Mode' : 'Dashboard'}
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
@@ -648,7 +648,7 @@ export function MainContent() {
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="cursor-pointer px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="cursor-pointer px-3 py-1.5 sm:py-2 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
             >
               {SUPPORTED_CURRENCIES.map(cur => (
                 <option key={cur} value={cur}>{cur}</option>
@@ -658,10 +658,10 @@ export function MainContent() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 sm:pb-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 pb-24 sm:pb-4">
         {/* Guest Warning */}
         {user.isGuest && (
-          <div className="mb-4 sm:mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 sm:p-4">
+          <div className="mb-3 sm:mb-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3">
             <div className="flex items-start gap-2 sm:gap-3">
               <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
@@ -675,15 +675,15 @@ export function MainContent() {
           </div>
         )}
 
-        {/* Summary Stats - Responsive Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
-          {/* Balance - Takes full width on mobile */}
-          <div className="col-span-2 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-xl p-4 sm:p-6 text-white shadow-lg">
+        {/* Summary Stats - Tighter spacing */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 mb-3 sm:mb-4">
+          {/* Balance */}
+          <div className="col-span-2 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-xl p-4 sm:p-5 text-white shadow-lg">
             <p className="text-xs sm:text-sm opacity-90 mb-1">Total Balance</p>
             <p className="text-2xl sm:text-3xl font-bold truncate">
               {dataLoading ? '...' : `${currency} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
             </p>
-            <div className="flex items-center gap-2 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/20 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 sm:gap-4 mt-3 pt-3 border-t border-white/20 text-xs sm:text-sm">
               <div className="flex-1 min-w-0">
                 <p className="opacity-75 text-xs">Income</p>
                 <p className="font-semibold truncate">{currency} {dashboardData?.summary.totalIncome.toFixed(2) || '0.00'}</p>
@@ -696,76 +696,73 @@ export function MainContent() {
           </div>
 
           {/* Lent */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-6 border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
                 <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
                 </svg>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">You Lent</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">You Lent</p>
             </div>
-            <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+            <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
               {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalLoaned.toFixed(2) || '0.00'}`}
             </p>
           </div>
 
           {/* Borrowed */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 lg:p-6 border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
                 <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" />
                 </svg>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Borrowed</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Borrowed</p>
             </div>
-            <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+            <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
               {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalBorrowed.toFixed(2) || '0.00'}`}
             </p>
           </div>
         </div>
 
-        {/* Quick Actions - Desktop */}
-        <div className="hidden sm:flex gap-3 mb-4 sm:mb-6">
+        {/* Quick Actions - Desktop - Tighter */}
+        <div className="hidden sm:flex gap-2.5 mb-3 sm:mb-4">
           <button 
             onClick={() => setModalType('income')}
-            className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 sm:py-4 font-medium transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+            className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 sm:py-3 font-medium transition-colors flex items-center justify-center gap-2 text-sm"
           >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span className="hidden sm:inline">Add Income</span>
-            <span className="sm:hidden">Income</span>
+            Add Income
           </button>
           <button 
             onClick={() => setModalType('expense')}
-            className="cursor-pointer flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-3 sm:py-4 font-medium transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+            className="cursor-pointer flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 sm:py-3 font-medium transition-colors flex items-center justify-center gap-2 text-sm"
           >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
-            <span className="hidden sm:inline">Add Expense</span>
-            <span className="sm:hidden">Expense</span>
+            Add Expense
           </button>
           <button 
             onClick={() => setModalType('loan')}
-            className="cursor-pointer flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 sm:py-4 font-medium transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+            className="cursor-pointer flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 sm:py-3 font-medium transition-colors flex items-center justify-center gap-2 text-sm"
           >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
             </svg>
-            <span className="hidden sm:inline">Add Loan</span>
-            <span className="sm:hidden">Loan</span>
+            Add Loan
           </button>
         </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* Search and Filters - Tighter */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             {/* Search Bar */}
             <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
@@ -773,7 +770,7 @@ export function MainContent() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search transactions..."
-                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -781,7 +778,7 @@ export function MainContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="cursor-pointer flex-1 sm:flex-initial px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors"
+                className="cursor-pointer flex-1 sm:flex-initial px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -790,7 +787,7 @@ export function MainContent() {
               </button>
               <button
                 onClick={exportToCSV}
-                className="cursor-pointer flex-1 sm:flex-initial px-4 py-2 sm:py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors"
+                className="cursor-pointer flex-1 sm:flex-initial px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -802,14 +799,14 @@ export function MainContent() {
 
           {/* Advanced Filters */}
           {showFilters && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="mt-2.5 pt-2.5 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
                 <input
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -818,7 +815,7 @@ export function MainContent() {
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -826,7 +823,7 @@ export function MainContent() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'date' | 'amount')}
-                  className="cursor-pointer w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="cursor-pointer w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="date">Date</option>
                   <option value="amount">Amount</option>
@@ -845,7 +842,7 @@ export function MainContent() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`cursor-pointer flex-1 min-w-[80px] px-4 py-3 text-xs sm:text-sm font-medium capitalize transition-colors ${
+                  className={`cursor-pointer flex-1 min-w-[80px] px-4 py-2.5 text-xs sm:text-sm font-medium capitalize transition-colors ${
                     activeTab === tab
                       ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -858,13 +855,13 @@ export function MainContent() {
           </div>
 
           {/* Activity List */}
-          <div className="p-3 sm:p-4">
+          <div className="p-3">
             {dataLoading ? (
               <div className="flex justify-center py-12">
                 <LoadingSpinner />
               </div>
             ) : getFilteredActivity().length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {getFilteredActivity().map((item: any) => (
                   item.isLoan ? (
                     <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} currency={currency} />
@@ -894,7 +891,7 @@ export function MainContent() {
 
       {/* Floating Action Button - Mobile */}
       <div className="sm:hidden fixed bottom-6 right-4 z-50">
-        {/* Quick Action Buttons - Appear when FAB is clicked */}
+        {/* Quick Action Buttons */}
         {showQuickActions && (
           <div className="absolute bottom-16 right-0 space-y-3 mb-2">
             <button

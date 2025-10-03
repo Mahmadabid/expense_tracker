@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
 
     // Remove .lean() to allow mongoose middleware to decrypt
     const loans = await LoanModel.find(base).sort({ date: -1 }).limit(limit);
+
     return successResponse(loans);
   } catch (err) {
     console.error('Loans list error:', err);
@@ -61,8 +62,28 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const userId = decoded.uid;
 
-    // Create loan document - pre-save hook will handle encryption
-    const loan = new LoanModel({
+    // Manually build encrypted payload BEFORE constructing mongoose doc to avoid plaintext persistence
+    const sensitivePayload = {
+      amount,
+      originalAmount: amount,
+      remainingAmount: amount,
+      description: description || '',
+      counterparty: {
+        userId: counterparty.userId || undefined,
+        name: counterparty.name,
+        email: counterparty.email || undefined,
+        phone: counterparty.phone || undefined,
+      },
+      payments: [],
+      comments: [],
+    };
+
+    // Lazy import encrypt (avoid circular if any)
+    const { encryptObject } = await import('@/lib/utils/encryption');
+    const encryptedData = encryptObject(sensitivePayload);
+
+    // Create document WITHOUT any of the sensitive plaintext fields
+    const loan = await LoanModel.create({
       userId,
       type: 'loan',
       currency,
@@ -75,26 +96,9 @@ export async function POST(request: NextRequest) {
       direction,
       collaborators: [],
       pendingApprovals: [],
+      encryptedData,
+      ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
     });
-
-    // Add optional non-encrypted fields
-    if (dueDate) loan.dueDate = new Date(dueDate);
-
-    // Set sensitive data that will be encrypted by pre-save hook
-    (loan as any).amount = amount;
-    (loan as any).originalAmount = amount;
-    (loan as any).remainingAmount = amount;
-    (loan as any).counterparty = {
-      userId: counterparty.userId || undefined,
-      name: counterparty.name,
-      email: counterparty.email || undefined,
-      phone: counterparty.phone || undefined,
-    };
-    (loan as any).payments = [];
-    (loan as any).comments = [];
-    if (description) (loan as any).description = description;
-
-    await loan.save();
 
     return successResponse(loan, 'Loan created successfully', 201);
   } catch (error: any) {

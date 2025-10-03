@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }).limit(50),
       LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }).limit(50),
     ]);
-
+console.log(loans)
     // Calculate summaries
     const totalIncome = entries.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
     const totalExpense = entries.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);

@@ -4,6 +4,7 @@ import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
 import { LoanModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
+import { decryptObject, encryptObject } from '@/lib/utils/encryption';
 
 async function auth(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -21,14 +22,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     await connectDB();
 
-    const loan = await LoanModel.findById(id);
+    // Fetch only required fields to reduce payload
+    const loan = await LoanModel.findById(id).select('userId encryptedData collaborators version lastModifiedBy direction status currency date tags createdBy pendingApprovals dueDate');
     if (!loan) return notFoundResponse('Loan not found');
 
-    // Allow loan owner, counterparty, or collaborators to add payments
-    const canAddPayment = loan.userId === a.uid || 
-                         loan.counterparty?.userId === a.uid ||
-                         loan.collaborators?.some(c => c.userId === a.uid && c.status === 'accepted');
-    
+    // Decrypt sensitive bundle
+  const anyLoan: any = loan;
+  const decrypted = decryptObject<any>(anyLoan.encryptedData);
+    if (!decrypted) return serverErrorResponse('Failed to decrypt loan data');
+
+    const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, description, comments } = decrypted;
+
+    // Authorization: owner, counterparty, accepted collaborator
+    const canAddPayment = loan.userId === a.uid ||
+      (counterparty && counterparty.userId === a.uid) ||
+      loan.collaborators?.some((c: any) => c.userId === a.uid && c.status === 'accepted');
+
     if (!canAddPayment) {
       return unauthorizedResponse('Not authorized to add payments to this loan');
     }
@@ -36,16 +45,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     const { amount, date, method, notes } = body;
 
-    // Validate payment data
-    if (!amount || amount <= 0) {
-      return errorResponse('Payment amount must be positive');
-    }
+    if (!amount || amount <= 0) return errorResponse('Payment amount must be positive');
+    if (amount > remainingAmount) return errorResponse(`Payment amount (${amount}) cannot exceed remaining amount (${remainingAmount})`);
 
-    if (amount > loan.remainingAmount) {
-      return errorResponse(`Payment amount (${amount}) cannot exceed remaining loan amount (${loan.remainingAmount})`);
-    }
-
-    // Add payment manually instead of using the model method
     const newPayment: any = {
       _id: new mongoose.Types.ObjectId(),
       amount,
@@ -56,18 +58,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       version: 1,
       createdAt: new Date(),
     };
-    
-    loan.payments.push(newPayment);
-    loan.remainingAmount = Math.max(0, loan.remainingAmount - amount);
-    
-    if (loan.remainingAmount === 0) {
-      loan.status = 'paid';
-    }
-    
-    loan.version = (loan.version || 1) + 1;
-    loan.lastModifiedBy = a.uid;
 
-    await loan.save();
+    const updatedPayments = [...payments, newPayment];
+    const newRemaining = Math.max(0, remainingAmount - amount);
+    const newStatus = newRemaining === 0 ? 'paid' : loan.status;
+
+    // Rebuild sensitive payload
+    const updatedSensitive = {
+      amount: totalAmount,
+      originalAmount: originalAmount ?? totalAmount,
+      remainingAmount: newRemaining,
+      description: description || '',
+      counterparty: counterparty || null,
+      payments: updatedPayments,
+      comments: comments || [],
+    };
+
+    const newEncryptedData = encryptObject(updatedSensitive);
+
+    // Optimistic concurrency control based on version
+    const prevVersion = loan.version || 1;
+    const nextVersion = prevVersion + 1;
+
+    const updateResult = await LoanModel.updateOne(
+      { _id: loan._id, version: prevVersion },
+      {
+        $set: {
+          encryptedData: newEncryptedData,
+          status: newStatus,
+          lastModifiedBy: a.uid,
+          version: nextVersion,
+        },
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return errorResponse('Concurrent modification detected. Please retry.');
+    }
 
     return successResponse(newPayment, 'Payment added successfully', 201);
   } catch (error: any) {
@@ -82,20 +109,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const a = await auth(request); if ('error' in a) return a.error;
     await connectDB();
 
-    // Remove .lean() for decryption middleware
-    const loan = await LoanModel.findById(params.id);
+    const loan = await LoanModel.findById(params.id).select('userId encryptedData collaborators');
     if (!loan) return notFoundResponse('Loan not found');
 
-    // Check access permissions
-    const hasAccess = loan.userId === a.uid || 
-                     (loan as any).counterparty?.userId === a.uid ||
-                     (loan as any).collaborators?.some((c: any) => c.userId === a.uid);
-    
-    if (!hasAccess) {
-      return unauthorizedResponse('Access denied');
-    }
+  const anyLoan: any = loan;
+  const decrypted = decryptObject<any>(anyLoan.encryptedData);
+    if (!decrypted) return serverErrorResponse('Failed to decrypt loan data');
 
-    return successResponse(loan.payments || []);
+    const { counterparty, payments = [] } = decrypted;
+
+    const hasAccess = loan.userId === a.uid ||
+      (counterparty && counterparty.userId === a.uid) ||
+      loan.collaborators?.some((c: any) => c.userId === a.uid);
+
+    if (!hasAccess) return unauthorizedResponse('Access denied');
+
+    return successResponse(payments);
   } catch (error: any) {
     console.error('Payments fetch error:', error);
     return serverErrorResponse(error?.message || 'Failed to fetch payments');
