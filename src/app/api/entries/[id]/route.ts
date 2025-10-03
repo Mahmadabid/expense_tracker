@@ -19,7 +19,8 @@ export async function GET(
     const { id } = await context.params;
     await connectDB();
 
-    const entry = await EntryModel.findOne({ _id: id, userId: decodedToken.uid }).lean();
+    // Remove .lean() to allow mongoose middleware to decrypt
+    const entry = await EntryModel.findOne({ _id: id, userId: decodedToken.uid });
     if (!entry) return notFoundResponse('Entry not found');
 
     return successResponse(entry);

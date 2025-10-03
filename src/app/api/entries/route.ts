@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
     const query: any = { userId: decodedToken.uid, status };
     if (type) query.type = type;
 
-    const entries = await EntryModel.find(query).sort({ date: -1 }).limit(limit).lean();
+    // Don't use .lean() - we need mongoose middleware to decrypt data
+    const entries = await EntryModel.find(query).sort({ date: -1 }).limit(limit);
     return successResponse(entries);
   } catch (error) {
     console.error('Entries fetch error:', error);

@@ -18,12 +18,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const a = await auth(request); if ('error' in a) return a.error;
     await connectDB();
-    const loan = await LoanModel.findById(params.id).lean();
+    // Remove .lean() to allow decryption middleware
+    const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
     // Access check
     if (loan.userId !== a.uid && 
-        !loan.collaborators?.some(c => c.userId === a.uid) &&
-        loan.counterparty?.userId !== a.uid) {
+        !(loan as any).collaborators?.some((c: any) => c.userId === a.uid) &&
+        (loan as any).counterparty?.userId !== a.uid) {
       return unauthorizedResponse('Access denied');
     }
     return successResponse(loan);

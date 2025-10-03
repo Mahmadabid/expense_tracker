@@ -22,17 +22,17 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const userId = decodedToken.uid;
 
-    // Parallel fetch for performance
+    // Parallel fetch for performance (removed .lean() to allow decryption middleware)
     const [entries, loans] = await Promise.all([
-      EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }).limit(50).lean(),
-      LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }).limit(50).lean(),
+      EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }).limit(50),
+      LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }).limit(50),
     ]);
 
     // Calculate summaries
-    const totalIncome = entries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
-    const totalExpense = entries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
-    const totalLoaned = loans.filter(l => l.direction === 'lent').reduce((sum, l) => sum + l.remainingAmount, 0);
-    const totalBorrowed = loans.filter(l => l.direction === 'borrowed').reduce((sum, l) => sum + l.remainingAmount, 0);
+    const totalIncome = entries.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+    const totalExpense = entries.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+    const totalLoaned = loans.filter((l: any) => l.direction === 'lent').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
+    const totalBorrowed = loans.filter((l: any) => l.direction === 'borrowed').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
 
     return successResponse({
       summary: {

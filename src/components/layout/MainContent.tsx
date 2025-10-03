@@ -18,6 +18,243 @@ interface DashboardData {
   recentLoans: any[];
 }
 
+// Entry Card Component
+function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void; currency: string }) {
+  const [showActions, setShowActions] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this entry?')) return;
+    setDeleting(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/entries/${entry._id}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+      if (res.ok) onUpdate();
+    } catch (err) {
+      console.error('Failed to delete entry:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+            entry.type === 'income' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' : 
+            'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+          }`}>
+            {entry.type}
+          </span>
+          {entry.category && <span className="text-xs text-gray-500 dark:text-gray-400">• {entry.category}</span>}
+          <span className="text-xs text-gray-400 dark:text-gray-500">{new Date(entry.date).toLocaleDateString()}</span>
+        </div>
+        {entry.description && <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5 truncate">{entry.description}</p>}
+      </div>
+      <div className="flex items-center gap-3 ml-3">
+        <span className={`text-base font-semibold whitespace-nowrap ${
+          entry.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+        }`}>
+          {entry.type === 'income' ? '+' : '-'}{entry.currency} {entry.amount?.toFixed(2) || '0.00'}
+        </span>
+        <div className="relative">
+          <button onClick={() => setShowActions(!showActions)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded">
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+            </svg>
+          </button>
+          {showActions && (
+            <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-10">
+              <button onClick={handleDelete} disabled={deleting} className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Loan Card Component
+function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => void; currency: string }) {
+  const [showActions, setShowActions] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [processing, setProcessing] = useState(false);
+
+  const handleAddPayment = async () => {
+    const amt = parseFloat(paymentAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          amount: amt,
+          date: new Date().toISOString(),
+          notes: paymentNotes || undefined,
+        }),
+      });
+      if (res.ok) {
+        setShowPaymentModal(false);
+        setPaymentAmount('');
+        setPaymentNotes('');
+        onUpdate();
+      }
+    } catch (err) {
+      console.error('Failed to add payment:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleCloseLoan = async () => {
+    if (!confirm('Mark this loan as paid/closed?')) return;
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ status: 'paid' }),
+      });
+      if (res.ok) onUpdate();
+    } catch (err) {
+      console.error('Failed to close loan:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this loan?')) return;
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+      if (res.ok) onUpdate();
+    } catch (err) {
+      console.error('Failed to delete loan:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                loan.direction === 'lent' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400' : 
+                'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400'
+              }`}>
+                {loan.direction === 'lent' ? 'Lent' : 'Borrowed'}
+              </span>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                loan.status === 'active' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
+                loan.status === 'paid' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
+                'bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-400'
+              }`}>
+                {loan.status}
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white/90">{loan.counterparty?.name || 'Unknown'}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{new Date(loan.date).toLocaleDateString()}</span>
+            </div>
+            {loan.description && <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 truncate">{loan.description}</p>}
+            <div className="flex items-center gap-3 mt-1 text-sm">
+              <span className="text-gray-600 dark:text-gray-400">
+                Remaining: <span className="font-semibold text-gray-900 dark:text-white/90">{loan.currency} {loan.remainingAmount?.toFixed(2) || '0.00'}</span>
+              </span>
+              {loan.payments && loan.payments.length > 0 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">• {loan.payments.length} payment{loan.payments.length !== 1 ? 's' : ''}</span>
+              )}
+            </div>
+          </div>
+          <div className="relative flex-shrink-0">
+            <button onClick={() => setShowActions(!showActions)} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded">
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+            {showActions && (
+              <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-10">
+                {loan.status === 'active' && (
+                  <>
+                    <button onClick={() => { setShowPaymentModal(true); setShowActions(false); }} className="w-full text-left px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg">
+                      Add Payment
+                    </button>
+                    <button onClick={handleCloseLoan} disabled={processing} className="w-full text-left px-3 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700">
+                      Mark as Paid
+                    </button>
+                  </>
+                )}
+                <button onClick={handleDelete} disabled={processing} className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-b-lg">
+                  {processing ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-lg p-6">
+            <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white/80">Add Payment</h4>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Amount</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={paymentAmount} 
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={`Max: ${loan.remainingAmount?.toFixed(2)}`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Notes (optional)</label>
+                <textarea 
+                  value={paymentNotes} 
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowPaymentModal(false)} disabled={processing} className="px-4 py-2 rounded-md text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600">
+                  Cancel
+                </button>
+                <button onClick={handleAddPayment} disabled={processing} className="px-4 py-2 rounded-md text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                  {processing ? 'Adding...' : 'Add Payment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function MainContent() {
   const { user, loading } = useAuth();
   const [modalType, setModalType] = useState<null | 'income' | 'expense' | 'loan'>(null);
@@ -27,6 +264,7 @@ export function MainContent() {
   const [formData, setFormData] = useState({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PKR');
+  const [activityFilter, setActivityFilter] = useState<'all' | 'income' | 'expense' | 'loans'>('all');
   
   const SUPPORTED_CURRENCIES = ['PKR','KWD','USD','EUR','GBP','AED','SAR','CAD','AUD','JPY'] as const;
 
@@ -68,6 +306,20 @@ export function MainContent() {
     } finally {
       setDataLoading(false);
     }
+  };
+
+  const getFilteredActivity = () => {
+    if (!dashboardData) return [];
+    
+    const entries = (dashboardData.recentEntries || []).map((e: any) => ({ ...e, isLoan: false }));
+    const loans = (dashboardData.recentLoans || []).map((l: any) => ({ ...l, isLoan: true }));
+    const combined = [...entries, ...loans].sort((a, b) => 
+      new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
+    );
+
+    if (activityFilter === 'all') return combined;
+    if (activityFilter === 'loans') return loans;
+    return entries.filter((e: any) => e.type === activityFilter);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -212,7 +464,7 @@ export function MainContent() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
           <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Total Income</h3>
           <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600 dark:text-green-400">
@@ -229,6 +481,26 @@ export function MainContent() {
           <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Net Balance</h3>
           <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">
             {dataLoading ? '...' : `${currency} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+          <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Total Lent</h3>
+          <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalLoaned.toFixed(2) || '0.00'}`}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+          <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Total Borrowed</h3>
+          <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600 dark:text-orange-400">
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalBorrowed.toFixed(2) || '0.00'}`}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+          <h3 className="text-sm sm:text-base md:text-lg font-medium text-gray-900 dark:text-white/80 mb-1 sm:mb-2">Net Loan Balance</h3>
+          <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${
+            (dashboardData?.summary.netLoan || 0) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
+          }`}>
+            {dataLoading ? '...' : `${currency} ${dashboardData?.summary.netLoan.toFixed(2) || '0.00'}`}
           </p>
         </div>
       </div>
@@ -249,12 +521,48 @@ export function MainContent() {
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white/80 mb-4">Recent Activity</h3>
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <p>No entries yet. Add your first income, expense, or loan to get started!</p>
+      {/* Recent Activity - Unified View */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white/80">Recent Activity</h3>
+          {/* Filter Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setActivityFilter('all')} className={`px-3 py-1 text-xs font-medium rounded ${activityFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+              All
+            </button>
+            <button onClick={() => setActivityFilter('income')} className={`px-3 py-1 text-xs font-medium rounded ${activityFilter === 'income' ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+              Income
+            </button>
+            <button onClick={() => setActivityFilter('expense')} className={`px-3 py-1 text-xs font-medium rounded ${activityFilter === 'expense' ? 'bg-red-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+              Expenses
+            </button>
+            <button onClick={() => setActivityFilter('loans')} className={`px-3 py-1 text-xs font-medium rounded ${activityFilter === 'loans' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+              Loans
+            </button>
+          </div>
         </div>
+        
+        {dataLoading ? (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {getFilteredActivity().length > 0 ? (
+              getFilteredActivity().map((item: any) => (
+                item.isLoan ? (
+                  <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} currency={currency} />
+                ) : (
+                  <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} currency={currency} />
+                )
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>No {activityFilter !== 'all' ? activityFilter : 'activity'} yet. Start by adding your first entry!</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal for Adding Income/Expense/Loan */}

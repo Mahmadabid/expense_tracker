@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     if (status) base.status = status;
     if (direction) base.direction = direction;
 
-    const loans = await LoanModel.find(base).sort({ date: -1 }).limit(limit).lean();
+    // Remove .lean() to allow mongoose middleware to decrypt
+    const loans = await LoanModel.find(base).sort({ date: -1 }).limit(limit);
     return successResponse(loans);
   } catch (err) {
     console.error('Loans list error:', err);

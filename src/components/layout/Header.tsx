@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 
 export function Header() {
   const { user, loading, signIn, signOut, signInAsGuest } = useAuth();
@@ -36,6 +37,9 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4">
+            {/* Notifications */}
+            <NotificationBell />
+
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}

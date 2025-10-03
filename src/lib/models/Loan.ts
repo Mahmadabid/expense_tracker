@@ -153,15 +153,9 @@ const LoanSchema = new Schema(
       default: 'loan',
     },
     // Encrypted sensitive data bundled as single string
+    // amount, originalAmount, remainingAmount, description, counterparty, 
+    // payments, comments are NOT stored as real fields - only in encryptedData
     encryptedData: String,
-    // Virtual fields populated from encryptedData
-    amount: Schema.Types.Mixed,
-    originalAmount: Schema.Types.Mixed,
-    remainingAmount: Schema.Types.Mixed,
-    description: Schema.Types.Mixed,
-    counterparty: Schema.Types.Mixed,
-    payments: Schema.Types.Mixed,
-    comments: Schema.Types.Mixed,
     // Keep indexable/queryable fields unencrypted
     currency: {
       type: String,

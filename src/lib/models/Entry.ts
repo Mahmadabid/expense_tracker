@@ -20,10 +20,8 @@ const EntrySchema = new Schema(
       enum: ['income', 'expense', 'loan'],
     },
     // Encrypted sensitive data stored as single string
+    // amount and description are NOT stored here - only in encryptedData
     encryptedData: String,
-    // Virtual fields that get populated from encryptedData
-    amount: Schema.Types.Mixed,
-    description: Schema.Types.Mixed,
     // Keep indexable fields unencrypted for querying
     currency: {
       type: String,

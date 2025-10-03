@@ -19,19 +19,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const a = await auth(request); if ('error' in a) return a.error;
     await connectDB();
 
-    const loan = await LoanModel.findById(params.id).lean();
+    const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
     // Check access permissions
     const hasAccess = loan.userId === a.uid || 
-                     loan.counterparty?.userId === a.uid ||
-                     loan.collaborators?.some(c => c.userId === a.uid);
+                     (loan as any).counterparty?.userId === a.uid ||
+                     (loan as any).collaborators?.some((c: any) => c.userId === a.uid);
     
     if (!hasAccess) {
       return unauthorizedResponse('Access denied');
     }
 
-    const comment = loan.comments?.find(c => c._id.toString() === params.commentId);
+    const comment = (loan as any).comments?.find((c: any) => c._id.toString() === params.commentId);
     if (!comment) return notFoundResponse('Comment not found');
 
     return successResponse(comment);
