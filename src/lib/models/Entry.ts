@@ -19,11 +19,27 @@ const EntrySchema = new Schema(
       required: true,
       enum: ['income', 'expense', 'loan'],
     },
+    // Temporary fields for input - will be encrypted into encryptedData
+    // These are NOT persisted to the database
+    amount: {
+      type: Number,
+      required: false,
+      select: false, // Don't include in queries by default
+    },
+    description: {
+      type: String,
+      required: false,
+      select: false, // Don't include in queries by default
+    },
     // Encrypted sensitive data stored as single string
-    // amount and description are NOT stored here - only in encryptedData
+    // amount and description are encrypted here
     encryptedData: {
       type: String,
-      required: true,
+      required: function(this: any) {
+        // Only require encryptedData if we don't have plain data
+        // This allows the pre-validate middleware to run and encrypt the data
+        return this.amount === undefined;
+      },
     },
     // Keep indexable fields unencrypted for querying
     currency: {
@@ -86,75 +102,59 @@ EntrySchema.index({ createdAt: -1 });
 EntrySchema.pre('validate', function(next) {
   const doc = this as any;
   
-  // Only encrypt if we have plain data
+  // Only encrypt if we have plain data (amount is the key indicator)
   const hasPlainData = doc.amount !== undefined;
   
   if (hasPlainData) {
-    console.log('[ENTRY PRE-VALIDATE] Encrypting sensitive data...');
+    console.log('[ENTRY PRE-VALIDATE] Starting encryption. Amount:', doc.amount);
     
     try {
       const sensitiveData = {
         amount: doc.amount,
         description: doc.description || '',
-        category: doc.category || '',
-        tags: doc.tags || [],
       };
       
-      // Encrypt
+      // Encrypt the sensitive data
       const encrypted = encryptObject(sensitiveData);
-      console.log('[ENTRY PRE-VALIDATE] Encrypted data length:', encrypted?.length);
       
-      doc.encryptedData = encrypted;
-      
-      // Mark encryptedData as modified to ensure it's saved
-      doc.markModified('encryptedData');
-      
-      // Remove plain fields BEFORE validation
-      delete doc.amount;
-      delete doc.description;
-      delete doc.category;
-      
-      // Keep tags as empty array for schema validity
-      doc.tags = [];
-      
-      if (doc._doc) {
-        delete doc._doc.amount;
-        delete doc._doc.description;
-        delete doc._doc.category;
-        doc._doc.tags = [];
+      if (!encrypted) {
+        throw new Error('Encryption returned empty string');
       }
       
-      console.log('[ENTRY PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
+      console.log('[ENTRY PRE-VALIDATE] Encrypted successfully. Length:', encrypted.length);
+      
+      // Set encrypted data on the document
+      doc.encryptedData = encrypted;
+      
+      // Mark the field as modified
+      doc.markModified('encryptedData');
+      
+      // Remove plain fields (they will be cleaned up in pre-save too)
+      doc.amount = undefined;
+      doc.description = undefined;
+      
+      console.log('[ENTRY PRE-VALIDATE] Encryption complete. EncryptedData set:', !!doc.encryptedData);
     } catch (error) {
       console.error('[ENTRY PRE-VALIDATE] Encryption error:', error);
       return next(error as Error);
     }
+  } else if (!doc.encryptedData) {
+    console.error('[ENTRY PRE-VALIDATE] No plain data and no encryptedData!');
   }
   
   next();
 });
 
-// Pre-save middleware - Double-check fields are removed
+// Pre-save middleware - Version management and cleanup
 EntrySchema.pre('save', function(next) {
   const doc = this as any;
   
-  // Ensure these don't exist
-  delete doc.amount;
-  delete doc.description;
-  delete doc.category;
-  
-  // Keep tags as empty array
-  if (!Array.isArray(doc.tags)) {
-    doc.tags = [];
+  // Remove temporary fields before saving (they should be in encryptedData now)
+  if (doc.amount !== undefined) {
+    doc.amount = undefined;
   }
-  
-  if (doc._doc) {
-    delete doc._doc.amount;
-    delete doc._doc.description;
-    delete doc._doc.category;
-    if (!Array.isArray(doc._doc.tags)) {
-      doc._doc.tags = [];
-    }
+  if (doc.description !== undefined) {
+    doc.description = undefined;
   }
   
   // Version management
@@ -173,22 +173,16 @@ function decryptEntryData(doc: any) {
     const decrypted = decryptObject<{ 
       amount: number; 
       description?: string;
-      category?: string;
-      tags?: string[];
     }>(doc.encryptedData);
     if (decrypted) {
       // Set decrypted fields on the document
       doc.set('amount', decrypted.amount, { strict: false });
       doc.set('description', decrypted.description || '', { strict: false });
-      doc.set('category', decrypted.category || '', { strict: false });
-      doc.set('tags', decrypted.tags || [], { strict: false });
       
       // Also set on _doc for direct access
       if (doc._doc) {
         doc._doc.amount = decrypted.amount;
         doc._doc.description = decrypted.description || '';
-        doc._doc.category = decrypted.category || '';
-        doc._doc.tags = decrypted.tags || [];
       }
     }
   }
@@ -219,14 +213,10 @@ EntrySchema.methods.toJSON = function() {
     const decrypted = decryptObject<{ 
       amount: number; 
       description?: string;
-      category?: string;
-      tags?: string[];
     }>(entryObject.encryptedData);
     if (decrypted) {
       entryObject.amount = decrypted.amount;
       entryObject.description = decrypted.description || '';
-      entryObject.category = decrypted.category || '';
-      entryObject.tags = decrypted.tags || [];
     }
   }
   
