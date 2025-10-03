@@ -21,7 +21,10 @@ const EntrySchema = new Schema(
     },
     // Encrypted sensitive data stored as single string
     // amount and description are NOT stored here - only in encryptedData
-    encryptedData: String,
+    encryptedData: {
+      type: String,
+      required: true,
+    },
     // Keep indexable fields unencrypted for querying
     currency: {
       type: String,
@@ -66,6 +69,7 @@ const EntrySchema = new Schema(
   {
     timestamps: true,
     collection: 'entries',
+    strict: 'throw', // Throw error if trying to save fields not in schema
   }
 );
 
@@ -79,28 +83,36 @@ EntrySchema.index({ createdAt: -1 });
 
 // Pre-save middleware - Encrypt sensitive data
 EntrySchema.pre('save', function(next) {
-  // Bundle sensitive data into encrypted field
   const doc = this as any;
   
-  // If we have amount and description as separate fields (for backwards compatibility or API input)
-  if (doc.amount !== undefined || doc.description !== undefined) {
+  // Only encrypt if we have plain data from API request
+  const hasPlainData = doc.amount !== undefined;
+  
+  if (hasPlainData) {
     const sensitiveData = {
       amount: doc.amount,
       description: doc.description || '',
     };
     
-    doc.encryptedData = encryptObject(sensitiveData);
+    // Set encrypted data
+    this.set('encryptedData', encryptObject(sensitiveData));
     
-    // Remove the plain fields so they don't get stored
+    // Explicitly unset plain fields so they're NOT saved to database
+    this.set('amount', undefined, { strict: false });
+    this.set('description', undefined, { strict: false });
+    
+    // Also delete from the raw object
     delete doc.amount;
     delete doc.description;
+    delete doc._doc?.amount;
+    delete doc._doc?.description;
   }
   
   // Version management
   if (this.isNew) {
-    (this as any).version = 1;
+    this.set('version', 1);
   } else if (this.isModified() && !this.isNew) {
-    (this as any).version = ((this as any).version || 1) + 1;
+    this.set('version', (this.get('version') || 1) + 1);
   }
   
   next();

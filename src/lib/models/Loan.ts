@@ -155,7 +155,10 @@ const LoanSchema = new Schema(
     // Encrypted sensitive data bundled as single string
     // amount, originalAmount, remainingAmount, description, counterparty, 
     // payments, comments are NOT stored as real fields - only in encryptedData
-    encryptedData: String,
+    encryptedData: {
+      type: String,
+      required: true,
+    },
     // Keep indexable/queryable fields unencrypted
     currency: {
       type: String,
@@ -215,6 +218,7 @@ const LoanSchema = new Schema(
   {
     timestamps: true,
     collection: 'loans',
+    strict: 'throw', // Throw error if trying to save fields not in schema
   }
 );
 
@@ -228,21 +232,34 @@ LoanSchema.index({ dueDate: 1 });
 LoanSchema.pre('save', function(next) {
   const doc = this as any;
   
-  // Bundle all sensitive data into encryptedData field
-  if (doc.amount !== undefined || doc.description !== undefined || doc.counterparty) {
+  // Only encrypt if we have the plain data (e.g., from API request)
+  // If encryptedData already exists and plain fields don't, skip encryption
+  const hasPlainData = doc.amount !== undefined || doc.counterparty !== undefined;
+  
+  if (hasPlainData) {
     const sensitiveData: any = {
       amount: doc.amount,
       originalAmount: doc.originalAmount || doc.amount,
-      remainingAmount: doc.remainingAmount !== undefined ? doc.remainingAmount : doc.amount,
+      remainingAmount: doc.remainingAmount !== undefined ? doc.remainingAmount : (doc.originalAmount || doc.amount),
       description: doc.description || '',
       counterparty: doc.counterparty || null,
       payments: doc.payments || [],
       comments: doc.comments || [],
     };
     
-    doc.encryptedData = encryptObject(sensitiveData);
+    // Set encrypted data
+    this.set('encryptedData', encryptObject(sensitiveData));
     
-    // Remove plain fields
+    // Explicitly unset plain fields so they're NOT saved to database
+    this.set('amount', undefined, { strict: false });
+    this.set('originalAmount', undefined, { strict: false });
+    this.set('remainingAmount', undefined, { strict: false });
+    this.set('description', undefined, { strict: false });
+    this.set('counterparty', undefined, { strict: false });
+    this.set('payments', undefined, { strict: false });
+    this.set('comments', undefined, { strict: false });
+    
+    // Also delete from the raw object
     delete doc.amount;
     delete doc.originalAmount;
     delete doc.remainingAmount;
@@ -250,13 +267,20 @@ LoanSchema.pre('save', function(next) {
     delete doc.counterparty;
     delete doc.payments;
     delete doc.comments;
+    delete doc._doc?.amount;
+    delete doc._doc?.originalAmount;
+    delete doc._doc?.remainingAmount;
+    delete doc._doc?.description;
+    delete doc._doc?.counterparty;
+    delete doc._doc?.payments;
+    delete doc._doc?.comments;
   }
   
   // Version management
   if (this.isNew) {
-    (this as any).version = 1;
+    this.set('version', 1);
   } else if (this.isModified() && !this.isNew) {
-    (this as any).version = ((this as any).version || 1) + 1;
+    this.set('version', (this.get('version') || 1) + 1);
   }
   
   next();
