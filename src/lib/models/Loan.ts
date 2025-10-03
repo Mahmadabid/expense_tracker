@@ -218,7 +218,8 @@ const LoanSchema = new Schema(
   {
     timestamps: true,
     collection: 'loans',
-    strict: 'throw', // Throw error if trying to save fields not in schema
+    strict: true, // Only allow fields defined in schema
+    strictQuery: true,
   }
 );
 
@@ -228,15 +229,16 @@ LoanSchema.index({ userId: 1, status: 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
 LoanSchema.index({ dueDate: 1 });
 
-// Pre-save middleware - Encrypt sensitive data
-LoanSchema.pre('save', function(next) {
+// Pre-save middleware - Encrypt sensitive data BEFORE Mongoose processes it
+LoanSchema.pre('validate', function(next) {
   const doc = this as any;
   
-  // Only encrypt if we have the plain data (e.g., from API request)
-  // If encryptedData already exists and plain fields don't, skip encryption
+  // Check if we have plain data that needs encryption
   const hasPlainData = doc.amount !== undefined || doc.counterparty !== undefined;
   
   if (hasPlainData) {
+    console.log('[LOAN PRE-VALIDATE] Encrypting sensitive data...');
+    
     const sensitiveData: any = {
       amount: doc.amount,
       originalAmount: doc.originalAmount || doc.amount,
@@ -247,19 +249,10 @@ LoanSchema.pre('save', function(next) {
       comments: doc.comments || [],
     };
     
-    // Set encrypted data
-    this.set('encryptedData', encryptObject(sensitiveData));
+    // Encrypt and set encryptedData
+    doc.encryptedData = encryptObject(sensitiveData);
     
-    // Explicitly unset plain fields so they're NOT saved to database
-    this.set('amount', undefined, { strict: false });
-    this.set('originalAmount', undefined, { strict: false });
-    this.set('remainingAmount', undefined, { strict: false });
-    this.set('description', undefined, { strict: false });
-    this.set('counterparty', undefined, { strict: false });
-    this.set('payments', undefined, { strict: false });
-    this.set('comments', undefined, { strict: false });
-    
-    // Also delete from the raw object
+    // CRITICAL: Remove these from the document BEFORE validation
     delete doc.amount;
     delete doc.originalAmount;
     delete doc.remainingAmount;
@@ -267,20 +260,52 @@ LoanSchema.pre('save', function(next) {
     delete doc.counterparty;
     delete doc.payments;
     delete doc.comments;
-    delete doc._doc?.amount;
-    delete doc._doc?.originalAmount;
-    delete doc._doc?.remainingAmount;
-    delete doc._doc?.description;
-    delete doc._doc?.counterparty;
-    delete doc._doc?.payments;
-    delete doc._doc?.comments;
+    
+    // Also remove from _doc if it exists
+    if (doc._doc) {
+      delete doc._doc.amount;
+      delete doc._doc.originalAmount;
+      delete doc._doc.remainingAmount;
+      delete doc._doc.description;
+      delete doc._doc.counterparty;
+      delete doc._doc.payments;
+      delete doc._doc.comments;
+    }
+    
+    console.log('[LOAN PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
+  }
+  
+  next();
+});
+
+// Also add pre-save to ensure they stay deleted
+LoanSchema.pre('save', function(next) {
+  const doc = this as any;
+  
+  // Double-check these fields are not present
+  delete doc.amount;
+  delete doc.originalAmount;
+  delete doc.remainingAmount;
+  delete doc.description;
+  delete doc.counterparty;
+  delete doc.payments;
+  delete doc.comments;
+  
+  if (doc._doc) {
+    delete doc._doc.amount;
+    delete doc._doc.originalAmount;
+    delete doc._doc.remainingAmount;
+    delete doc._doc.description;
+    delete doc._doc.counterparty;
+    delete doc._doc.payments;
+    delete doc._doc.comments;
   }
   
   // Version management
   if (this.isNew) {
-    this.set('version', 1);
+    doc.version = 1;
   } else if (this.isModified() && !this.isNew) {
-    this.set('version', (this.get('version') || 1) + 1);
+    doc.version = (doc.version || 1) + 1;
   }
   
   next();

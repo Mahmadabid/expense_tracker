@@ -15,12 +15,13 @@ async function auth(request: NextRequest) {
 }
 
 // POST /api/loans/:id/payments - Add payment to loan
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const a = await auth(request); if ('error' in a) return a.error;
+    const { id } = await params;
     await connectDB();
 
-    const loan = await LoanModel.findById(params.id);
+    const loan = await LoanModel.findById(id);
     if (!loan) return notFoundResponse('Loan not found');
 
     // Allow loan owner, counterparty, or collaborators to add payments

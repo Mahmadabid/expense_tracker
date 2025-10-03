@@ -61,10 +61,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const userId = decoded.uid;
 
-    const loanData: any = {
+    // Create loan document - pre-save hook will handle encryption
+    const loan = new LoanModel({
       userId,
       type: 'loan',
-      amount,
       currency,
       date: new Date(),
       status: 'active',
@@ -73,25 +73,28 @@ export async function POST(request: NextRequest) {
       createdBy: userId,
       lastModifiedBy: userId,
       direction,
-      counterparty: {
-        userId: counterparty.userId || undefined,
-        name: counterparty.name,
-        email: counterparty.email || undefined,
-        phone: counterparty.phone || undefined,
-      },
-      originalAmount: amount,
-      remainingAmount: amount,
-      payments: [],
-      comments: [],
       collaborators: [],
       pendingApprovals: [],
+    });
+
+    // Add optional non-encrypted fields
+    if (dueDate) loan.dueDate = new Date(dueDate);
+
+    // Set sensitive data that will be encrypted by pre-save hook
+    (loan as any).amount = amount;
+    (loan as any).originalAmount = amount;
+    (loan as any).remainingAmount = amount;
+    (loan as any).counterparty = {
+      userId: counterparty.userId || undefined,
+      name: counterparty.name,
+      email: counterparty.email || undefined,
+      phone: counterparty.phone || undefined,
     };
+    (loan as any).payments = [];
+    (loan as any).comments = [];
+    if (description) (loan as any).description = description;
 
-    // Only add optional fields if they are provided
-    if (description) loanData.description = description;
-    if (dueDate) loanData.dueDate = new Date(dueDate);
-
-    const loan = await LoanModel.create(loanData);
+    await loan.save();
 
     return successResponse(loan, 'Loan created successfully', 201);
   } catch (error: any) {

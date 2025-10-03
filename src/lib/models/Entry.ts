@@ -69,7 +69,8 @@ const EntrySchema = new Schema(
   {
     timestamps: true,
     collection: 'entries',
-    strict: 'throw', // Throw error if trying to save fields not in schema
+    strict: true, // Only allow fields defined in schema
+    strictQuery: true,
   }
 );
 
@@ -81,38 +82,57 @@ EntrySchema.index({ userId: 1, category: 1 });
 EntrySchema.index({ tags: 1 });
 EntrySchema.index({ createdAt: -1 });
 
-// Pre-save middleware - Encrypt sensitive data
-EntrySchema.pre('save', function(next) {
+// Pre-validate middleware - Encrypt BEFORE validation
+EntrySchema.pre('validate', function(next) {
   const doc = this as any;
   
-  // Only encrypt if we have plain data from API request
+  // Only encrypt if we have plain data
   const hasPlainData = doc.amount !== undefined;
   
   if (hasPlainData) {
+    console.log('[ENTRY PRE-VALIDATE] Encrypting sensitive data...');
+    
     const sensitiveData = {
       amount: doc.amount,
       description: doc.description || '',
     };
     
-    // Set encrypted data
-    this.set('encryptedData', encryptObject(sensitiveData));
+    // Encrypt
+    doc.encryptedData = encryptObject(sensitiveData);
     
-    // Explicitly unset plain fields so they're NOT saved to database
-    this.set('amount', undefined, { strict: false });
-    this.set('description', undefined, { strict: false });
-    
-    // Also delete from the raw object
+    // Remove plain fields BEFORE validation
     delete doc.amount;
     delete doc.description;
-    delete doc._doc?.amount;
-    delete doc._doc?.description;
+    
+    if (doc._doc) {
+      delete doc._doc.amount;
+      delete doc._doc.description;
+    }
+    
+    console.log('[ENTRY PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
+  }
+  
+  next();
+});
+
+// Pre-save middleware - Double-check fields are removed
+EntrySchema.pre('save', function(next) {
+  const doc = this as any;
+  
+  // Ensure these don't exist
+  delete doc.amount;
+  delete doc.description;
+  
+  if (doc._doc) {
+    delete doc._doc.amount;
+    delete doc._doc.description;
   }
   
   // Version management
   if (this.isNew) {
-    this.set('version', 1);
+    doc.version = 1;
   } else if (this.isModified() && !this.isNew) {
-    this.set('version', (this.get('version') || 1) + 1);
+    doc.version = (doc.version || 1) + 1;
   }
   
   next();

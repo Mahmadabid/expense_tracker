@@ -19,14 +19,12 @@ export function NotificationBell() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Only fetch on initial mount, not repeatedly
   useEffect(() => {
     if (user && !user.isGuest) {
       fetchNotifications();
-      // Poll for new notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user]); // Only when user changes
 
   const fetchNotifications = async () => {
     try {
@@ -79,10 +77,18 @@ export function NotificationBell() {
 
   if (!user || user.isGuest) return null;
 
+  const handleToggleDropdown = () => {
+    if (!showDropdown) {
+      // Only fetch when opening dropdown
+      fetchNotifications();
+    }
+    setShowDropdown(!showDropdown);
+  };
+
   return (
     <div className="relative">
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
+        onClick={handleToggleDropdown}
         className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         aria-label="Notifications"
       >
