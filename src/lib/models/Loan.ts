@@ -232,6 +232,10 @@ LoanSchema.index({ dueDate: 1 });
 // Pre-save middleware - Encrypt sensitive data BEFORE Mongoose processes it
 LoanSchema.pre('validate', function(next) {
   const doc = this as any;
+  // If encryptedData already present (route pre-encrypted), skip
+  if (doc.encryptedData && (doc.amount === undefined && doc.counterparty === undefined)) {
+    return next();
+  }
   
   // Check if we have plain data that needs encryption
   const hasPlainData = doc.amount !== undefined || doc.counterparty !== undefined;
@@ -239,40 +243,61 @@ LoanSchema.pre('validate', function(next) {
   if (hasPlainData) {
     console.log('[LOAN PRE-VALIDATE] Encrypting sensitive data...');
     
-    const sensitiveData: any = {
-      amount: doc.amount,
-      originalAmount: doc.originalAmount || doc.amount,
-      remainingAmount: doc.remainingAmount !== undefined ? doc.remainingAmount : (doc.originalAmount || doc.amount),
-      description: doc.description || '',
-      counterparty: doc.counterparty || null,
-      payments: doc.payments || [],
-      comments: doc.comments || [],
-    };
-    
-    // Encrypt and set encryptedData
-    doc.encryptedData = encryptObject(sensitiveData);
-    
-    // CRITICAL: Remove these from the document BEFORE validation
-    delete doc.amount;
-    delete doc.originalAmount;
-    delete doc.remainingAmount;
-    delete doc.description;
-    delete doc.counterparty;
-    delete doc.payments;
-    delete doc.comments;
-    
-    // Also remove from _doc if it exists
-    if (doc._doc) {
-      delete doc._doc.amount;
-      delete doc._doc.originalAmount;
-      delete doc._doc.remainingAmount;
-      delete doc._doc.description;
-      delete doc._doc.counterparty;
-      delete doc._doc.payments;
-      delete doc._doc.comments;
+    try {
+      const sensitiveData: any = {
+        amount: doc.amount,
+        originalAmount: doc.originalAmount || doc.amount,
+        remainingAmount: doc.remainingAmount !== undefined ? doc.remainingAmount : (doc.originalAmount || doc.amount),
+        description: doc.description || '',
+        counterparty: doc.counterparty || null,
+        payments: doc.payments || [],
+        comments: doc.comments || [],
+        // Encrypt category and tags as well (non-queryable sensitive data)
+        category: doc.category || '',
+        tags: doc.tags || [],
+      };
+      
+      // Encrypt and set encryptedData
+      const encrypted = encryptObject(sensitiveData);
+      console.log('[LOAN PRE-VALIDATE] Encrypted data length:', encrypted?.length);
+      
+      doc.encryptedData = encrypted;
+      
+      // Mark encryptedData as modified to ensure it's saved
+      doc.markModified('encryptedData');
+      
+      // CRITICAL: Remove these from the document BEFORE validation
+      delete doc.amount;
+      delete doc.originalAmount;
+      delete doc.remainingAmount;
+      delete doc.description;
+      delete doc.counterparty;
+      delete doc.payments;
+      delete doc.comments;
+      delete doc.category;
+      
+      // Keep tags at schema level for querying if needed, but also store encrypted
+      // Set to empty array to maintain schema validity
+      doc.tags = [];
+      
+      // Also remove from _doc if it exists
+      if (doc._doc) {
+        delete doc._doc.amount;
+        delete doc._doc.originalAmount;
+        delete doc._doc.remainingAmount;
+        delete doc._doc.description;
+        delete doc._doc.counterparty;
+        delete doc._doc.payments;
+        delete doc._doc.comments;
+        delete doc._doc.category;
+        doc._doc.tags = [];
+      }
+      
+      console.log('[LOAN PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
+    } catch (error) {
+      console.error('[LOAN PRE-VALIDATE] Encryption error:', error);
+      return next(error as Error);
     }
-    
-    console.log('[LOAN PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
   }
   
   next();
@@ -290,6 +315,12 @@ LoanSchema.pre('save', function(next) {
   delete doc.counterparty;
   delete doc.payments;
   delete doc.comments;
+  delete doc.category;
+  
+  // Keep tags as empty array
+  if (!Array.isArray(doc.tags)) {
+    doc.tags = [];
+  }
   
   if (doc._doc) {
     delete doc._doc.amount;
@@ -299,6 +330,10 @@ LoanSchema.pre('save', function(next) {
     delete doc._doc.counterparty;
     delete doc._doc.payments;
     delete doc._doc.comments;
+    delete doc._doc.category;
+    if (!Array.isArray(doc._doc.tags)) {
+      doc._doc.tags = [];
+    }
   }
   
   // Version management
@@ -322,16 +357,34 @@ function decryptLoanData(doc: any) {
       counterparty: any;
       payments: any[];
       comments: any[];
+      category?: string;
+      tags?: string[];
     }>(doc.encryptedData);
     
     if (decrypted) {
-      doc.amount = decrypted.amount;
-      doc.originalAmount = decrypted.originalAmount;
-      doc.remainingAmount = decrypted.remainingAmount;
-      doc.description = decrypted.description || '';
-      doc.counterparty = decrypted.counterparty;
-      doc.payments = decrypted.payments || [];
-      doc.comments = decrypted.comments || [];
+      // Set decrypted fields on the document
+      doc.set('amount', decrypted.amount, { strict: false });
+      doc.set('originalAmount', decrypted.originalAmount, { strict: false });
+      doc.set('remainingAmount', decrypted.remainingAmount, { strict: false });
+      doc.set('description', decrypted.description || '', { strict: false });
+      doc.set('counterparty', decrypted.counterparty, { strict: false });
+      doc.set('payments', decrypted.payments || [], { strict: false });
+      doc.set('comments', decrypted.comments || [], { strict: false });
+      doc.set('category', decrypted.category || '', { strict: false });
+      doc.set('tags', decrypted.tags || [], { strict: false });
+      
+      // Also set on _doc for direct access
+      if (doc._doc) {
+        doc._doc.amount = decrypted.amount;
+        doc._doc.originalAmount = decrypted.originalAmount;
+        doc._doc.remainingAmount = decrypted.remainingAmount;
+        doc._doc.description = decrypted.description || '';
+        doc._doc.counterparty = decrypted.counterparty;
+        doc._doc.payments = decrypted.payments || [];
+        doc._doc.comments = decrypted.comments || [];
+        doc._doc.category = decrypted.category || '';
+        doc._doc.tags = decrypted.tags || [];
+      }
     }
   }
 }
@@ -348,10 +401,50 @@ LoanSchema.post('findOneAndUpdate', function(doc: LoanDocument | null) {
   if (doc) decryptLoanData(doc);
 });
 
+LoanSchema.post('save', function(doc: LoanDocument) {
+  decryptLoanData(doc);
+});
+
 // Methods
 LoanSchema.methods.toJSON = function() {
   const loanObject = this.toObject();
+  
+  // Decrypt data if not already done
+  if (loanObject.encryptedData && !loanObject.amount) {
+    const decrypted = decryptObject<{
+      amount: number;
+      originalAmount: number;
+      remainingAmount: number;
+      description?: string;
+      counterparty: any;
+      payments: any[];
+      comments: any[];
+      category?: string;
+      tags?: string[];
+    }>(loanObject.encryptedData);
+    
+    if (decrypted) {
+      loanObject.amount = decrypted.amount;
+      loanObject.originalAmount = decrypted.originalAmount;
+      loanObject.remainingAmount = decrypted.remainingAmount;
+      loanObject.description = decrypted.description || '';
+      loanObject.counterparty = decrypted.counterparty;
+      loanObject.payments = decrypted.payments || [];
+      loanObject.comments = decrypted.comments || [];
+      loanObject.category = decrypted.category || '';
+      loanObject.tags = decrypted.tags || [];
+    }
+  }
+  
+  // Remove encryptedData from the response sent to client
+  delete loanObject.encryptedData;
+  
+  // Convert _id to string
   loanObject._id = loanObject._id.toString();
+  
+  // Add a flag to indicate this is a loan (for client-side filtering)
+  loanObject.isLoan = true;
+  
   return loanObject;
 };
 
@@ -420,5 +513,11 @@ LoanSchema.statics.findByCounterparty = function(userId: string, counterpartyUse
 };
 
 // Export model
+// In development, delete the cached model to ensure middleware is registered
+if (process.env.NODE_ENV !== 'production' && mongoose.models.Loan) {
+  delete mongoose.models.Loan;
+  delete (mongoose as any).modelSchemas?.Loan;
+}
+
 export const LoanModel = (mongoose.models.Loan || model<LoanDocument, LoanModel>('Loan', LoanSchema)) as LoanModel;
 export type { LoanDocument };

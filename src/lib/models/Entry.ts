@@ -92,24 +92,43 @@ EntrySchema.pre('validate', function(next) {
   if (hasPlainData) {
     console.log('[ENTRY PRE-VALIDATE] Encrypting sensitive data...');
     
-    const sensitiveData = {
-      amount: doc.amount,
-      description: doc.description || '',
-    };
-    
-    // Encrypt
-    doc.encryptedData = encryptObject(sensitiveData);
-    
-    // Remove plain fields BEFORE validation
-    delete doc.amount;
-    delete doc.description;
-    
-    if (doc._doc) {
-      delete doc._doc.amount;
-      delete doc._doc.description;
+    try {
+      const sensitiveData = {
+        amount: doc.amount,
+        description: doc.description || '',
+        category: doc.category || '',
+        tags: doc.tags || [],
+      };
+      
+      // Encrypt
+      const encrypted = encryptObject(sensitiveData);
+      console.log('[ENTRY PRE-VALIDATE] Encrypted data length:', encrypted?.length);
+      
+      doc.encryptedData = encrypted;
+      
+      // Mark encryptedData as modified to ensure it's saved
+      doc.markModified('encryptedData');
+      
+      // Remove plain fields BEFORE validation
+      delete doc.amount;
+      delete doc.description;
+      delete doc.category;
+      
+      // Keep tags as empty array for schema validity
+      doc.tags = [];
+      
+      if (doc._doc) {
+        delete doc._doc.amount;
+        delete doc._doc.description;
+        delete doc._doc.category;
+        doc._doc.tags = [];
+      }
+      
+      console.log('[ENTRY PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
+    } catch (error) {
+      console.error('[ENTRY PRE-VALIDATE] Encryption error:', error);
+      return next(error as Error);
     }
-    
-    console.log('[ENTRY PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
   }
   
   next();
@@ -122,10 +141,20 @@ EntrySchema.pre('save', function(next) {
   // Ensure these don't exist
   delete doc.amount;
   delete doc.description;
+  delete doc.category;
+  
+  // Keep tags as empty array
+  if (!Array.isArray(doc.tags)) {
+    doc.tags = [];
+  }
   
   if (doc._doc) {
     delete doc._doc.amount;
     delete doc._doc.description;
+    delete doc._doc.category;
+    if (!Array.isArray(doc._doc.tags)) {
+      doc._doc.tags = [];
+    }
   }
   
   // Version management
@@ -141,10 +170,26 @@ EntrySchema.pre('save', function(next) {
 // Post-find middleware - Decrypt sensitive data
 function decryptEntryData(doc: any) {
   if (doc && doc.encryptedData) {
-    const decrypted = decryptObject<{ amount: number; description?: string }>(doc.encryptedData);
+    const decrypted = decryptObject<{ 
+      amount: number; 
+      description?: string;
+      category?: string;
+      tags?: string[];
+    }>(doc.encryptedData);
     if (decrypted) {
-      doc.amount = decrypted.amount;
-      doc.description = decrypted.description || '';
+      // Set decrypted fields on the document
+      doc.set('amount', decrypted.amount, { strict: false });
+      doc.set('description', decrypted.description || '', { strict: false });
+      doc.set('category', decrypted.category || '', { strict: false });
+      doc.set('tags', decrypted.tags || [], { strict: false });
+      
+      // Also set on _doc for direct access
+      if (doc._doc) {
+        doc._doc.amount = decrypted.amount;
+        doc._doc.description = decrypted.description || '';
+        doc._doc.category = decrypted.category || '';
+        doc._doc.tags = decrypted.tags || [];
+      }
     }
   }
 }
@@ -161,10 +206,36 @@ EntrySchema.post('findOneAndUpdate', function(doc: EntryDocument | null) {
   if (doc) decryptEntryData(doc);
 });
 
+EntrySchema.post('save', function(doc: EntryDocument) {
+  decryptEntryData(doc);
+});
+
 // Methods
 EntrySchema.methods.toJSON = function() {
   const entryObject = this.toObject();
+  
+  // Decrypt data if not already done
+  if (entryObject.encryptedData && !entryObject.amount) {
+    const decrypted = decryptObject<{ 
+      amount: number; 
+      description?: string;
+      category?: string;
+      tags?: string[];
+    }>(entryObject.encryptedData);
+    if (decrypted) {
+      entryObject.amount = decrypted.amount;
+      entryObject.description = decrypted.description || '';
+      entryObject.category = decrypted.category || '';
+      entryObject.tags = decrypted.tags || [];
+    }
+  }
+  
+  // Remove encryptedData from the response sent to client
+  delete entryObject.encryptedData;
+  
+  // Convert _id to string
   entryObject._id = entryObject._id.toString();
+  
   return entryObject;
 };
 
@@ -188,5 +259,11 @@ EntrySchema.statics.findByUserAndDateRange = function(userId: string, startDate:
 };
 
 // Export model
+// In development, delete the cached model to ensure middleware is registered
+if (process.env.NODE_ENV !== 'production' && mongoose.models.Entry) {
+  delete mongoose.models.Entry;
+  delete (mongoose as any).modelSchemas?.Entry;
+}
+
 export const EntryModel = (mongoose.models.Entry || model<EntryDocument, EntryModel>('Entry', EntrySchema)) as EntryModel;
 export type { EntryDocument };

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const decrypted = decryptObject<any>(anyLoan.encryptedData);
     if (!decrypted) return serverErrorResponse('Failed to decrypt loan data');
 
-    const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, description, comments } = decrypted;
+    const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, description, comments, category, tags } = decrypted;
 
     // Authorization: owner, counterparty, accepted collaborator
     const canAddPayment = loan.userId === a.uid ||
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const newRemaining = Math.max(0, remainingAmount - amount);
     const newStatus = newRemaining === 0 ? 'paid' : loan.status;
 
-    // Rebuild sensitive payload
+    // Rebuild sensitive payload with all encrypted fields
     const updatedSensitive = {
       amount: totalAmount,
       originalAmount: originalAmount ?? totalAmount,
@@ -72,6 +72,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       counterparty: counterparty || null,
       payments: updatedPayments,
       comments: comments || [],
+      category: category || '',
+      tags: tags || [],
     };
 
     const newEncryptedData = encryptObject(updatedSensitive);

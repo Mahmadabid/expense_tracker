@@ -14,21 +14,97 @@ interface DashboardData {
     totalBorrowed: number;
     netLoan: number;
   };
-  // Old field names kept for backward compatibility
   recentEntries?: any[];
   recentLoans?: any[];
-  // New full datasets
   entries?: any[];
   loans?: any[];
 }
 
-// Clean Entry Card Component
+// Compact Loading Skeleton
+function SkeletonCard() {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 animate-pulse border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 sm:h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+          <div className="h-2 sm:h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Professional Button Component
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  loading?: boolean;
+  variant?: 'primary' | 'success' | 'danger' | 'secondary' | 'ghost';
+  size?: 'sm' | 'md';
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  fullWidth?: boolean;
+}
+
+function Button({
+  children,
+  loading = false,
+  variant = 'primary',
+  size = 'md',
+  icon,
+  fullWidth = false,
+  className = '',
+  ...props
+}: ButtonProps) {
+  const variants = {
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+    success: 'bg-green-600 hover:bg-green-700 text-white shadow-sm',
+    danger: 'bg-red-600 hover:bg-red-700 text-white shadow-sm',
+    secondary: 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 shadow-sm',
+    ghost: 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300',
+  };
+
+  const sizes = {
+    sm: 'px-2.5 sm:px-3 py-1.5 text-xs',
+    md: 'px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm',
+  };
+
+  return (
+    <button
+      {...props}
+      disabled={loading || props.disabled}
+      className={`
+        inline-flex items-center justify-center gap-1.5 sm:gap-2 font-medium rounded-lg cursor-pointer
+        transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed
+        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+        ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}
+      `}
+    >
+      {loading ? (
+        <>
+          <svg className="animate-spin h-3 w-3 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="hidden sm:inline">Processing...</span>
+          <span className="sm:hidden">...</span>
+        </>
+      ) : (
+        <>
+          {icon}
+          {children}
+        </>
+      )}
+    </button>
+  );
+}
+
+// Compact Entry Card
 function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => void; currency: string }) {
-  const [showActions, setShowActions] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm('Delete this entry?')) return;
+    if (!confirm('Delete this transaction?')) return;
     setDeleting(true);
     try {
       const authHeaders = await getAuthHeader();
@@ -36,91 +112,106 @@ function EntryCard({ entry, onUpdate, currency }: { entry: any; onUpdate: () => 
         method: 'DELETE',
         headers: authHeaders,
       });
-      if (res.ok) onUpdate();
+      if (res.ok) {
+        onUpdate();
+      } else {
+        alert('Failed to delete');
+      }
     } catch (err) {
-      console.error('Failed to delete:', err);
+      console.error(err);
+      alert('Error occurred');
     } finally {
       setDeleting(false);
     }
   };
 
+  const isIncome = entry.type === 'income';
+
   return (
-    <div className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-      <div className="flex items-center gap-4 p-4">
+    <div className="group bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 relative">
+      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${isIncome ? 'bg-green-500' : 'bg-red-500'}`} />
+
+      <div className="flex items-center gap-2 sm:gap-3 pl-2">
         {/* Icon */}
-        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${entry.type === 'income'
-          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-          : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+        <div className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${isIncome
+            ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+            : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
           }`}>
-          {entry.type === 'income' ? (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+          {isIncome ? (
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12" />
             </svg>
           ) : (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
             </svg>
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-              {entry.description || entry.category || 'Untitled'}
-            </p>
-            {entry.category && entry.description && (
-              <span className="hidden sm:inline-flex px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+          <div className="flex items-center justify-between gap-2 mb-1 sm:mb-1.5">
+            <h4 className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-white truncate">
+              {entry.description || entry.category || 'Transaction'}
+            </h4>
+            <span className={`text-sm sm:text-base font-bold whitespace-nowrap ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+              {isIncome ? '+' : '-'}{currency} {entry.amount?.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+            {entry.category && (
+              <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium">
                 {entry.category}
               </span>
             )}
+            <span className="flex items-center gap-1">
+              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden sm:inline">{new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <span className="sm:hidden">{new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            </span>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
         </div>
 
-        {/* Amount */}
-        <div className="flex items-center gap-3">
-          <span className={`text-base font-semibold whitespace-nowrap ${entry.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-            }`}>
-            {entry.type === 'income' ? '+' : '-'}{currency} {entry.amount?.toFixed(2)}
-          </span>
-
-          {/* Actions */}
-          <div className="relative">
-            <button
-              onClick={() => setShowActions(!showActions)}
-              className="cursor-pointer opacity-0 group-hover:opacity-100 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-opacity"
-            >
-              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-              </svg>
-            </button>
-            {showActions && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowActions(false)} />
-                <div className="absolute right-0 top-8 z-20 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="cursor-pointer w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
-                  >
-                    {deleting ? 'Deleting...' : 'Delete'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+        {/* Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="cursor-pointer p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+            </svg>
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-8 sm:top-10 z-20 min-w-[120px] sm:min-w-[140px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="cursor-pointer w-full px-3 sm:px-4 py-2 sm:py-2.5 text-left text-xs sm:text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// Clean Loan Card Component
+// Responsive Loan Card - Payments button on separate line
 function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => void; currency: string }) {
-  const [showActions, setShowActions] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -130,7 +221,15 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
 
   const handleAddPayment = async () => {
     const amt = parseFloat(paymentAmount);
-    if (isNaN(amt) || amt <= 0) return;
+    if (isNaN(amt) || amt <= 0) {
+      alert('Enter a valid amount');
+      return;
+    }
+    if (amt > loan.remainingAmount) {
+      alert('Amount exceeds remaining balance');
+      return;
+    }
+
     setProcessing(true);
     try {
       const authHeaders = await getAuthHeader();
@@ -149,16 +248,19 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
         setPaymentDescription('');
         setPaymentDate(new Date().toISOString().split('T')[0]);
         onUpdate();
+      } else {
+        alert('Failed to add payment');
       }
     } catch (err) {
-      console.error('Failed to add payment:', err);
+      console.error(err);
+      alert('Error occurred');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleCloseLoan = async () => {
-    if (!confirm('Mark as paid?')) return;
+    if (!confirm('Mark as fully paid?')) return;
     setProcessing(true);
     try {
       const authHeaders = await getAuthHeader();
@@ -167,9 +269,15 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ status: 'paid' }),
       });
-      if (res.ok) onUpdate();
+      if (res.ok) {
+        setShowMenu(false);
+        onUpdate();
+      } else {
+        alert('Failed to update');
+      }
     } catch (err) {
-      console.error('Failed to close loan:', err);
+      console.error(err);
+      alert('Error occurred');
     } finally {
       setProcessing(false);
     }
@@ -184,221 +292,294 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
         method: 'DELETE',
         headers: authHeaders,
       });
-      if (res.ok) onUpdate();
+      if (res.ok) {
+        onUpdate();
+      } else {
+        alert('Failed to delete');
+      }
     } catch (err) {
-      console.error('Failed to delete:', err);
+      console.error(err);
+      alert('Error occurred');
     } finally {
       setProcessing(false);
     }
   };
 
   const progress = ((loan.amount - loan.remainingAmount) / loan.amount) * 100;
+  const isLent = loan.direction === 'lent';
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-        {/* Main Loan Info */}
-        <div className="group p-4">
-          <div className="flex items-center gap-4">
-            {/* Icon */}
-            <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${loan.direction === 'lent'
-              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-              : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-              }`}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 relative overflow-hidden">
+        {/* Side indicator */}
+        <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLent ? 'bg-blue-500' : 'bg-orange-500'}`} />
+        
+        <div className="pl-2">
+          {/* Header: Icon + Name + Menu - Single row on mobile */}
+          <div className="flex items-center gap-2 sm:gap-3 mb-3">
+            {/* Icon - Smaller on mobile */}
+            <div className={`flex-shrink-0 w-9 h-9 min-[450px]:w-12 min-[450px]:h-12 rounded-lg flex items-center justify-center ${
+              isLent
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
+            }`}>
+              <svg className="w-4 h-4 min-[450px]:w-6 min-[450px]:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
               </svg>
             </div>
 
-            {/* Content */}
+            {/* Name - Flex-1 to take available space */}
+            <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate flex-1 min-w-0">
+              {loan.counterparty?.name || 'Unknown'}
+            </h4>
+
+            {/* Menu button */}
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="cursor-pointer p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Content section - Now flows below on mobile, side-by-side on desktop */}
+          <div className="flex flex-col min-[450px]:flex-row min-[450px]:gap-3">
+            {/* Left spacer for alignment on desktop only */}
+            <div className="hidden min-[450px]:block min-[450px]:w-12 flex-shrink-0"></div>
+
+            {/* Main content */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {loan.counterparty?.name || 'Unknown'}
-                </p>
-                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${loan.status === 'active'
-                  ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400'
-                  : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                  }`}>
-                  {loan.status}
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  isLent
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
+                }`}>
+                  {isLent ? 'Lent' : 'Borrowed'}
+                </span>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  loan.status === 'active'
+                    ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                    : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                }`}>
+                  {loan.status === 'active' ? 'Active' : 'Paid'}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="hidden sm:inline">{new Date(loan.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  <span className="sm:hidden">{new Date(loan.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>{loan.direction === 'lent' ? 'You lent' : 'You borrowed'}</span>
-                <span>•</span>
-                <span>{new Date(loan.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              </div>
-            </div>
 
-            {/* Amount */}
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-base font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+              {/* Progress Bar */}
+              {loan.status === 'active' && loan.amount > loan.remainingAmount && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    <span>{progress.toFixed(0)}% Repaid</span>
+                    <span className="tabular-nums text-xs">
+                      {currency} {(loan.amount - loan.remainingAmount).toFixed(2)} / {loan.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${isLent ? 'bg-blue-500' : 'bg-orange-500'}`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Amount Display - Full Width */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 mb-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wide">
+                  Remaining Amount
+                </p>
+                <p className={`text-lg sm:text-xl font-bold tabular-nums ${
+                  isLent ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
+                }`}>
                   {currency} {loan.remainingAmount?.toFixed(2)}
                 </p>
-                {loan.payments?.length > 0 && (
-                  <button
-                    onClick={() => setShowPayments(!showPayments)}
-                    className="cursor-pointer text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {loan.payments.length} payment{loan.payments.length !== 1 ? 's' : ''}
-                  </button>
-                )}
               </div>
 
-              {/* Actions */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowActions(!showActions)}
-                  className="cursor-pointer p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                  </svg>
-                </button>
-                {showActions && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowActions(false)} />
-                    <div className="absolute right-0 top-8 z-20 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                      {loan.status === 'active' && (
-                        <>
-                          <button
-                            onClick={() => { setShowPaymentModal(true); setShowActions(false); }}
-                            className="cursor-pointer w-full px-3 py-2 text-left text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                          >
-                            Add Payment
-                          </button>
-                          <button
-                            onClick={handleCloseLoan}
-                            className="cursor-pointer w-full px-3 py-2 text-left text-sm text-green-600 dark:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                          >
-                            Mark as Paid
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={handleDelete}
-                        disabled={processing}
-                        className="cursor-pointer w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* Payments Button - Separate Line, Right Aligned */}
+              {loan.payments?.length > 0 && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowPayments(!showPayments)}
+                    className="cursor-pointer px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      {loan.payments.length} Payment{loan.payments.length !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Progress bar */}
-          {loan.status === 'active' && loan.amount > loan.remainingAmount && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-2">
-                <span>{progress.toFixed(0)}% paid</span>
-                <span>{currency} {(loan.amount - loan.remainingAmount).toFixed(2)} of {loan.amount.toFixed(2)}</span>
-              </div>
-              <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${loan.direction === 'lent' ? 'bg-blue-500' : 'bg-orange-500'
-                    }`}
-                  style={{ width: `${progress}%` }}
-                />
+          {/* Payments List */}
+          {showPayments && loan.payments?.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3 space-y-2">
+              <div className="flex flex-col min-[450px]:flex-row min-[450px]:gap-3">
+                {/* Left spacer for alignment on desktop */}
+                <div className="hidden min-[450px]:block min-[450px]:w-12 flex-shrink-0"></div>
+                
+                <div className="flex-1 min-w-0 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                    Payment History
+                  </p>
+                  {loan.payments.map((payment: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                      <div className="flex-1 min-w-0 pr-3">
+                        <p className="font-semibold text-sm text-gray-900 dark:text-white mb-1 tabular-nums">
+                          {currency} {payment.amount?.toFixed(2)}
+                        </p>
+                        {payment.description && (
+                          <p className="text-gray-500 dark:text-gray-400 truncate text-xs">{payment.description}</p>
+                        )}
+                      </div>
+                      <p className="text-gray-500 dark:text-gray-400 font-medium text-xs whitespace-nowrap">
+                        {new Date(payment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Payments List */}
-        {showPayments && loan.payments?.length > 0 && (
-          <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 py-3">
-            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Payment History</p>
-            <div className="space-y-2">
-              {loan.payments.map((payment: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between text-xs bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-900 dark:text-white font-medium">
-                      {currency} {payment.amount?.toFixed(2)}
-                    </p>
-                    {payment.description && (
-                      <p className="text-gray-500 dark:text-gray-400 truncate mt-0.5">{payment.description}</p>
-                    )}
-                  </div>
-                  <p className="text-gray-500 dark:text-gray-400 ml-2">
-                    {new Date(payment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </p>
-                </div>
-              ))}
+        {/* Menu Dropdown */}
+        {showMenu && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+            <div className="absolute right-3 top-14 sm:top-16 z-20 min-w-[160px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
+              {loan.status === 'active' && (
+                <>
+                  <button
+                    onClick={() => { setShowPaymentModal(true); setShowMenu(false); }}
+                    className="cursor-pointer w-full px-4 py-3 text-left text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Payment
+                  </button>
+                  <button
+                    onClick={handleCloseLoan}
+                    disabled={processing}
+                    className="cursor-pointer w-full px-4 py-3 text-left text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Mark as Paid
+                  </button>
+                </>
+              )}
+              <button
+                onClick={handleDelete}
+                disabled={processing}
+                className="cursor-pointer w-full px-4 py-3 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
+              </button>
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
-          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-lg rounded-t-2xl shadow-xl">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Add Payment</h4>
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
-                >
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-2xl sm:rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Add Payment</h4>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5 pb-8">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Payment Amount
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Maximum: {currency} {loan.remainingAmount?.toFixed(2)}
+                </p>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  placeholder="0.00"
+                  autoFocus
+                />
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    onWheel={(e) => e.currentTarget.blur()}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={`Max: ${loan.remainingAmount?.toFixed(2)}`}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Description</label>
-                  <input
-                    type="text"
-                    value={paymentDescription}
-                    onChange={(e) => setPaymentDescription(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Payment Date</label>
-                  <input
-                    type="date"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    className="cursor-pointer w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowPaymentModal(false)}
-                    disabled={processing}
-                    className="cursor-pointer flex-1 px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddPayment}
-                    disabled={processing}
-                    className="cursor-pointer flex-1 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50 transition-colors"
-                  >
-                    {processing ? 'Adding...' : 'Add'}
-                  </button>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentDescription}
+                  onChange={(e) => setPaymentDescription(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  placeholder="e.g., Partial payment"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="cursor-pointer w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowPaymentModal(false)}
+                  fullWidth
+                  size="md"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleAddPayment}
+                  loading={processing}
+                  fullWidth
+                  size="md"
+                >
+                  Add Payment
+                </Button>
               </div>
             </div>
           </div>
@@ -408,13 +589,61 @@ function LoanCard({ loan, onUpdate, currency }: { loan: any; onUpdate: () => voi
   );
 }
 
+// Enhanced Stats Card
+interface StatsCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  color?: string;
+  loading?: boolean;
+}
+
+function StatsCard({ title, value, icon, color = 'blue', loading = false }: StatsCardProps) {
+  const colors: any = {
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400',
+    red: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
+    orange: 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400',
+    cyan: 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400',
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
+          <div>
+            {icon}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5 sm:mb-1 truncate">{title}</p>
+          {loading ? (
+            <div className="h-4 sm:h-6 bg-gray-200 dark:bg-gray-700 rounded w-16 sm:w-20 animate-pulse" />
+          ) : (
+            <p className="text-xs sm:text-base font-semibold text-gray-900 dark:text-white truncate">{value}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MainContent() {
   const { user, loading } = useAuth();
-  const [modalType, setModalType] = useState<null | 'income' | 'expense' | 'loan'>(null);
+  const [modalType, setModalType] = useState<null | 'transaction' | 'loan'>(null);
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
+  const [formData, setFormData] = useState({
+    amount: '',
+    description: '',
+    category: '',
+    direction: 'lent',
+    counterpartyName: '',
+    counterpartyEmail: '',
+    dueDate: ''
+  });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PKR');
   const [activeTab, setActiveTab] = useState<'all' | 'income' | 'expense' | 'loans'>('all');
@@ -432,6 +661,7 @@ export function MainContent() {
     setModalType(null);
     setFormData({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
     setErrorMessage(null);
+    setTransactionType('expense');
   };
 
   useEffect(() => {
@@ -467,10 +697,35 @@ export function MainContent() {
     }
   };
 
+  // Calculate loan amounts from loans array
+  const calculateLoanAmounts = () => {
+    if (!dashboardData) return { totalLoaned: 0, totalBorrowed: 0 };
+
+    const rawLoansCandidate: any = (dashboardData as any).loans;
+    const rawLoans = Array.isArray(rawLoansCandidate)
+      ? rawLoansCandidate
+      : (rawLoansCandidate && Array.isArray(rawLoansCandidate.data))
+        ? rawLoansCandidate.data
+        : (dashboardData.recentLoans || []);
+
+    const loans = Array.isArray(rawLoans) ? rawLoans : [];
+
+    const totalLoaned = loans
+      .filter((loan: any) => loan.direction === 'lent' && loan.status === 'active')
+      .reduce((sum: number, loan: any) => sum + (loan.remainingAmount || 0), 0);
+
+    const totalBorrowed = loans
+      .filter((loan: any) => loan.direction === 'borrowed' && loan.status === 'active')
+      .reduce((sum: number, loan: any) => sum + (loan.remainingAmount || 0), 0);
+
+    return { totalLoaned, totalBorrowed };
+  };
+
+  const { totalLoaned, totalBorrowed } = calculateLoanAmounts();
+
   const getFilteredActivity = () => {
     if (!dashboardData) return [];
 
-    // New simplified response (arrays) with backward compatibility
     const rawEntriesCandidate: any = (dashboardData as any).entries;
     const rawLoansCandidate: any = (dashboardData as any).loans;
     const rawEntries = Array.isArray(rawEntriesCandidate)
@@ -567,7 +822,7 @@ export function MainContent() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `expense-tracker-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `finance-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -582,7 +837,7 @@ export function MainContent() {
       return;
     }
 
-    if (modalType === 'loan' && !formData.counterpartyName) {
+    if (modalType === 'loan' && !formData.counterpartyName.trim()) {
       setErrorMessage('Counterparty name is required');
       return;
     }
@@ -596,10 +851,13 @@ export function MainContent() {
         currency,
         description: formData.description || undefined,
         direction: formData.direction,
-        counterparty: { name: formData.counterpartyName, email: formData.counterpartyEmail || undefined },
+        counterparty: {
+          name: formData.counterpartyName.trim(),
+          email: formData.counterpartyEmail.trim() || undefined
+        },
         dueDate: formData.dueDate || undefined,
       } : {
-        type: modalType,
+        type: transactionType,
         amount: amt,
         currency,
         description: formData.description || undefined,
@@ -621,7 +879,7 @@ export function MainContent() {
         setErrorMessage(data?.message || 'Failed to create entry');
       }
     } catch (err) {
-      setErrorMessage('Network error');
+      setErrorMessage('Network error occurred');
     } finally {
       setSubmitting(false);
     }
@@ -639,29 +897,23 @@ export function MainContent() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 sm:p-8 text-center shadow-lg">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 sm:mb-6">
+              <svg className="w-8 h-8 sm:w-10 sm:h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Expense Tracker
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-8">
-              Smart money management made simple
-            </p>
-            <div className="space-y-3 text-left">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">Finance Tracker</h2>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-6 sm:mb-8">Professional money management made simple</p>
+            <div className="space-y-2 sm:space-y-3 text-left text-xs sm:text-sm">
               {[
-                'Track income, expenses & loans',
-                'Multi-currency support',
-                'Cloud sync across devices'
+                { icon: '💰', text: 'Track income & expenses' },
+                { icon: '🌍', text: 'Multi-currency support' },
+                { icon: '☁️', text: 'Cloud sync & backup' }
               ].map((feature, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>{feature}</span>
+                <div key={idx} className="flex items-center gap-2 sm:gap-3 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 sm:p-3">
+                  <span className="text-xl sm:text-2xl">{feature.icon}</span>
+                  <span className="font-medium">{feature.text}</span>
                 </div>
               ))}
             </div>
@@ -673,24 +925,30 @@ export function MainContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
+      {/* Enhanced Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                {user.isGuest ? 'Guest Mode' : 'Dashboard'}
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </p>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
+                  {user.isGuest ? 'Guest Mode' : 'Dashboard'}
+                </h1>
+                <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
             </div>
 
-            {/* Currency Selector */}
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="cursor-pointer px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="cursor-pointer px-2.5 sm:px-4 py-1.5 sm:py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
             >
               {SUPPORTED_CURRENCIES.map(cur => (
                 <option key={cur} value={cur}>{cur}</option>
@@ -700,179 +958,186 @@ export function MainContent() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 sm:pb-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 pb-24 sm:pb-6">
         {/* Guest Warning */}
         {user.isGuest && (
-          <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+          <div className="mb-4 sm:mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4">
+            <div className="flex items-start gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
               <div>
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                  Guest Mode
-                </p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Data stored locally. Sign in to sync across devices.
-                </p>
+                <p className="text-xs sm:text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-0.5 sm:mb-1">Guest Mode - Data Stored Locally</p>
+                <p className="text-[10px] sm:text-xs text-yellow-700 dark:text-yellow-300">Sign in to enable cloud sync and backup</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Balance Card */}
-          <div className="sm:col-span-2 bg-blue-600 dark:bg-blue-700 rounded-lg p-6 text-white">
-            <p className="text-sm font-medium opacity-90 mb-2">Total Balance</p>
-            <p className="text-4xl font-bold mb-4">
-              {dataLoading ? '...' : `${currency} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
-            </p>
-            <div className="flex items-center gap-6 pt-4 border-t border-white/20">
-              <div className="flex-1">
-                <p className="text-xs opacity-75 mb-1">Income</p>
-                <p className="font-semibold">{currency} {dashboardData?.summary.totalIncome.toFixed(2) || '0.00'}</p>
-              </div>
-              <div className="flex-1">
-                <p className="text-xs opacity-75 mb-1">Expenses</p>
-                <p className="font-semibold">{currency} {dashboardData?.summary.totalExpense.toFixed(2) || '0.00'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Lent Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">You Lent</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">
-                  {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalLoaned.toFixed(2) || '0.00'}`}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Borrowed Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-orange-50 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Borrowed</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">
-                  {dataLoading ? '...' : `${currency} ${dashboardData?.summary.totalBorrowed.toFixed(2) || '0.00'}`}
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* Enhanced Stats Grid */}
+        <div className="grid grid-cols-2 max-[420px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
+          <StatsCard
+            title="Balance"
+            value={`${currency} ${dashboardData?.summary.balance.toFixed(2) || '0.00'}`}
+            loading={dataLoading}
+            color="blue"
+            icon={
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+          <StatsCard
+            title="Income"
+            value={`${currency} ${dashboardData?.summary.totalIncome.toFixed(2) || '0.00'}`}
+            loading={dataLoading}
+            color="green"
+            icon={
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12" />
+              </svg>
+            }
+          />
+          <StatsCard
+            title="Expenses"
+            value={`${currency} ${dashboardData?.summary.totalExpense.toFixed(2) || '0.00'}`}
+            loading={dataLoading}
+            color="red"
+            icon={
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+              </svg>
+            }
+          />
+          <StatsCard
+            title="Lent Out"
+            value={`${currency} ${totalLoaned.toFixed(2)}`}
+            loading={dataLoading}
+            color="cyan"
+            icon={
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+              </svg>
+            }
+          />
+          <StatsCard
+            title="Borrowed"
+            value={`${currency} ${totalBorrowed.toFixed(2)}`}
+            loading={dataLoading}
+            color="orange"
+            icon={
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            }
+          />
         </div>
 
         {/* Quick Actions - Desktop */}
-        <div className="hidden sm:grid grid-cols-3 gap-3 mb-6">
-          <button
-            onClick={() => setModalType('income')}
-            className="cursor-pointer bg-green-600 hover:bg-green-700 text-white rounded-lg py-3 px-4 font-medium transition-colors flex items-center justify-center gap-2"
+        <div className="hidden sm:grid grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <Button
+            onClick={() => setModalType('transaction')}
+            variant="primary"
+            size="md"
+            icon={
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            }
+            fullWidth
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Income
-          </button>
-          <button
-            onClick={() => setModalType('expense')}
-            className="cursor-pointer bg-red-600 hover:bg-red-700 text-white rounded-lg py-3 px-4 font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
-            Add Expense
-          </button>
-          <button
+            Add Transaction
+          </Button>
+          <Button
             onClick={() => setModalType('loan')}
-            className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 font-medium transition-colors flex items-center justify-center gap-2"
+            variant="secondary"
+            size="md"
+            icon={
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+              </svg>
+            }
+            fullWidth
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
-            </svg>
             Add Loan
-          </button>
+          </Button>
         </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search Bar */}
+        {/* Search & Filters */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search transactions..."
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Search..."
+                className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               />
             </div>
 
-            {/* Filter and Export Buttons */}
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`cursor-pointer flex-1 sm:flex-initial px-4 py-2 rounded-lg font-medium text-sm transition-colors ${showFilters
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
+                variant={showFilters ? 'primary' : 'secondary'}
+                size="sm"
+                icon={
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                }
               >
-                Filter
-              </button>
-              <button
+                <span className="hidden sm:inline">Filters</span>
+              </Button>
+              <Button
                 onClick={exportToCSV}
-                className="cursor-pointer flex-1 sm:flex-initial px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors"
+                variant="success"
+                size="sm"
+                icon={
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                }
               >
-                Export
-              </button>
+                <span className="hidden sm:inline">Export</span>
+              </Button>
             </div>
           </div>
 
-          {/* Advanced Filters */}
           {showFilters && (
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Start Date</label>
+                <label className="block text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Start Date</label>
                 <input
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="cursor-pointer w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-xs sm:text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">End Date</label>
+                <label className="block text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">End Date</label>
                 <input
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="cursor-pointer w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-xs sm:text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Sort By</label>
+                <label className="block text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Sort By</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'date' | 'amount')}
-                  className="cursor-pointer w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="cursor-pointer w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="date">Date</option>
-                  <option value="amount">Amount</option>
+                  <option value="date">Date (Newest First)</option>
+                  <option value="amount">Amount (Highest First)</option>
                 </select>
               </div>
             </div>
@@ -880,17 +1145,17 @@ export function MainContent() {
         </div>
 
         {/* Activity Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          {/* Tabs */}
-          <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+          {/* Enhanced Tabs */}
+          <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <div className="flex">
               {(['all', 'income', 'expense', 'loans'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`cursor-pointer flex-1 px-4 py-3 max-[320px]:px-2 text-sm font-medium capitalize transition-colors ${activeTab === tab
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  className={`cursor-pointer flex-1 sm:min-w-[90px] px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-sm font-medium capitalize transition-all whitespace-nowrap ${activeTab === tab
+                      ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-gray-800'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50'
                     }`}
                 >
                   {tab}
@@ -900,13 +1165,13 @@ export function MainContent() {
           </div>
 
           {/* Activity List */}
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {dataLoading ? (
-              <div className="flex justify-center py-12">
-                <LoadingSpinner />
+              <div className="space-y-3 sm:space-y-4">
+                {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
               </div>
             ) : getFilteredActivity().length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3 sm:space-y-4">
                 {getFilteredActivity().map((item: any) => (
                   item.isLoan ? (
                     <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} currency={currency} />
@@ -916,115 +1181,138 @@ export function MainContent() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              <div className="text-center py-12 sm:py-16">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
                 </div>
-                <p className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                  No {activeTab !== 'all' ? activeTab : 'activity'} yet
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2">
+                  No {activeTab !== 'all' ? activeTab : 'data'} found
+                </h3>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
+                  {searchQuery || dateRange.start || dateRange.end ? 'Try adjusting your filters' : 'Get started by adding your first entry'}
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Start by adding your first entry
-                </p>
+                {!searchQuery && !dateRange.start && !dateRange.end && (
+                  <Button
+                    onClick={() => setModalType(activeTab === 'loans' ? 'loan' : 'transaction')}
+                    variant="primary"
+                    size="md"
+                    icon={
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    }
+                  >
+                    Add {activeTab === 'loans' ? 'Loan' : 'Transaction'}
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Floating Action Button - Mobile */}
-      <div className="sm:hidden fixed bottom-6 right-4 z-50">
-        {/* Quick Action Buttons */}
+      {/* Enhanced FAB - Mobile */}
+      <div className="sm:hidden fixed bottom-5 sm:bottom-6 right-5 sm:right-6 z-50">
         {showQuickActions && (
-          <div className="absolute bottom-20 right-0 space-y-3">
-            <button
-              onClick={() => { setModalType('loan'); setShowQuickActions(false); }}
-              className="cursor-pointer flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white pl-4 pr-5 py-3 rounded-full shadow-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
-              </svg>
-              <span className="font-medium">Loan</span>
-            </button>
-            <button
-              onClick={() => { setModalType('expense'); setShowQuickActions(false); }}
-              className="cursor-pointer flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white pl-4 pr-5 py-3 rounded-full shadow-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-              </svg>
-              <span className="font-medium">Expense</span>
-            </button>
-            <button
-              onClick={() => { setModalType('income'); setShowQuickActions(false); }}
-              className="cursor-pointer flex items-center gap-3 bg-green-600 hover:bg-green-700 text-white pl-4 pr-5 py-3 rounded-full shadow-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="font-medium">Income</span>
-            </button>
-          </div>
+          <>
+            <div className="absolute bottom-16 sm:bottom-20 right-0 space-y-2 sm:space-y-3 mb-2">
+              <button
+                onClick={() => { setModalType('loan'); setShowQuickActions(false); }}
+                className="cursor-pointer flex items-center gap-2 sm:gap-3 bg-blue-600 hover:bg-blue-700 text-white pl-4 sm:pl-5 pr-5 sm:pr-6 py-2.5 sm:py-3 rounded-full shadow-lg text-xs sm:text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                <span className="whitespace-nowrap">Add Loan</span>
+              </button>
+              <button
+                onClick={() => { setModalType('transaction'); setShowQuickActions(false); }}
+                className="cursor-pointer flex items-center gap-2 sm:gap-3 bg-green-600 hover:bg-green-700 text-white pl-4 sm:pl-5 pr-5 sm:pr-6 py-2.5 sm:py-3 rounded-full shadow-lg text-xs sm:text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="whitespace-nowrap">Add Transaction</span>
+              </button>
+            </div>
+            <div className="fixed inset-0 bg-black/30 -z-10" onClick={() => setShowQuickActions(false)} />
+          </>
         )}
 
-        {/* Backdrop */}
-        {showQuickActions && (
-          <div
-            className="fixed inset-0 bg-black/30 -z-10"
-            onClick={() => setShowQuickActions(false)}
-          />
-        )}
-
-        {/* Main FAB */}
         <button
           onClick={() => setShowQuickActions(!showQuickActions)}
-          className={`cursor-pointer w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all ${showQuickActions ? 'rotate-45' : ''
+          className={`cursor-pointer w-14 h-14 sm:w-16 sm:h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all ${showQuickActions ? 'rotate-45' : ''
             }`}
         >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
         </button>
       </div>
 
-      {/* Add Entry Modal */}
+      {/* Enhanced Modal */}
       {modalType && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
-          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-lg sm:rounded-lg rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                Add {modalType}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                {modalType === 'loan' ? 'Add Loan' : 'Add Transaction'}
               </h3>
               <button
                 onClick={closeModal}
-                className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                disabled={submitting}
+                className="cursor-pointer p-1.5 sm:p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Modal Content */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
               {errorMessage && (
-                <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                  <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <div className="flex items-start gap-2 sm:gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
-                  <p className="text-sm text-red-800 dark:text-red-200">{errorMessage}</p>
+                  <p className="text-xs sm:text-sm font-medium text-red-800 dark:text-red-200">{errorMessage}</p>
+                </div>
+              )}
+
+              {modalType === 'transaction' && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 sm:mb-3 uppercase tracking-wide">Transaction Type</label>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTransactionType('expense')}
+                      className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${transactionType === 'expense'
+                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                        }`}
+                    >
+                      <div className="text-sm sm:text-base font-semibold">Expense</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransactionType('income')}
+                      className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${transactionType === 'income'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
+                        }`}
+                    >
+                      <div className="text-sm sm:text-base font-semibold">Income</div>
+                    </button>
+                  </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Amount *
-                </label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">
+                  <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium text-sm sm:text-base">
                     {currency}
                   </span>
                   <input
@@ -1033,8 +1321,7 @@ export function MainContent() {
                     required
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    onWheel={(e) => e.currentTarget.blur()}
-                    className="w-full pl-20 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-lg font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-16 sm:pl-20 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base sm:text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="0.00"
                     autoFocus
                   />
@@ -1042,30 +1329,26 @@ export function MainContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Description
-                </label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Description</label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   placeholder="Optional"
                 />
               </div>
 
-              {modalType !== 'loan' && (
+              {modalType === 'transaction' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Category
-                  </label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Category</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="cursor-pointer w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-medium text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   >
-                    <option value="">Select category</option>
-                    {(modalType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
+                    <option value="">Select (optional)</option>
+                    {(transactionType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -1075,92 +1358,88 @@ export function MainContent() {
               {modalType === 'loan' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Loan Type *
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 sm:mb-3 uppercase tracking-wide">Loan Type</label>
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, direction: 'lent' })}
-                        className={`cursor-pointer p-4 rounded-lg border-2 transition-colors ${formData.direction === 'lent'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                        className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${formData.direction === 'lent'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                           }`}
                       >
-                        <div className="text-sm font-medium">I Lent</div>
-                        <div className="text-xs opacity-75 mt-1">They owe me</div>
+                        <div className="text-sm sm:text-base font-semibold mb-0.5 sm:mb-1">I Lent</div>
+                        <div className="text-[10px] sm:text-xs opacity-75">They owe me</div>
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, direction: 'borrowed' })}
-                        className={`cursor-pointer p-4 rounded-lg border-2 transition-colors ${formData.direction === 'borrowed'
-                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
-                          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                        className={`cursor-pointer p-3 sm:p-4 rounded-lg border-2 transition-all ${formData.direction === 'borrowed'
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
+                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400'
                           }`}
                       >
-                        <div className="text-sm font-medium">I Borrowed</div>
-                        <div className="text-xs opacity-75 mt-1">I owe them</div>
+                        <div className="text-sm sm:text-base font-semibold mb-0.5 sm:mb-1">I Borrowed</div>
+                        <div className="text-[10px] sm:text-xs opacity-75">I owe them</div>
                       </button>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Counterparty Name *
-                    </label>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Counterparty Name</label>
                     <input
                       type="text"
                       required
                       value={formData.counterpartyName}
                       onChange={(e) => setFormData({ ...formData, counterpartyName: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       placeholder="Person or company name"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email
-                    </label>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Email (Optional)</label>
                     <input
                       type="email"
                       value={formData.counterpartyEmail}
                       onChange={(e) => setFormData({ ...formData, counterpartyEmail: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Optional"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                      placeholder="email@example.com"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Due Date
-                    </label>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">Due Date (Optional)</label>
                     <input
                       type="date"
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                      className="cursor-pointer w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     />
                   </div>
                 </>
               )}
 
-              <div className="flex gap-3 pt-4">
-                <button
+              <div className="flex gap-2 sm:gap-3 pt-1 sm:pt-2">
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={closeModal}
                   disabled={submitting}
-                  className="cursor-pointer flex-1 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  fullWidth
+                  size="md"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={submitting}
-                  className="cursor-pointer flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                  variant="primary"
+                  loading={submitting}
+                  fullWidth
+                  size="md"
                 >
-                  {submitting ? 'Saving...' : 'Save'}
-                </button>
+                  Save
+                </Button>
               </div>
             </form>
           </div>

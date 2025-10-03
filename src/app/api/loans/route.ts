@@ -62,7 +62,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const userId = decoded.uid;
 
-    // Manually build encrypted payload BEFORE constructing mongoose doc to avoid plaintext persistence
+    console.log('[LOAN API] Creating loan with amount:', amount);
+
+    // Build sensitive bundle and encrypt here to avoid dependency on middleware timing
+    const { encryptObject } = await import('@/lib/utils/encryption');
     const sensitivePayload = {
       amount,
       originalAmount: amount,
@@ -76,29 +79,31 @@ export async function POST(request: NextRequest) {
       },
       payments: [],
       comments: [],
+      category: body.category || '',
+      tags: tags || [],
     };
-
-    // Lazy import encrypt (avoid circular if any)
-    const { encryptObject } = await import('@/lib/utils/encryption');
     const encryptedData = encryptObject(sensitivePayload);
 
-    // Create document WITHOUT any of the sensitive plaintext fields
     const loan = await LoanModel.create({
       userId,
       type: 'loan',
+      encryptedData,
       currency,
       date: new Date(),
       status: 'active',
-      tags: tags || [],
+      // store empty arrays for tags at schema level (tags inside encrypted)
+      tags: [],
       version: 1,
       createdBy: userId,
       lastModifiedBy: userId,
       direction,
       collaborators: [],
       pendingApprovals: [],
-      encryptedData,
+      ...(body.category ? { category: undefined } : {}),
       ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
     });
+
+    console.log('[LOAN API] Loan created successfully, has encryptedData:', !!(loan as any).encryptedData);
 
     return successResponse(loan, 'Loan created successfully', 201);
   } catch (error: any) {
