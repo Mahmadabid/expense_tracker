@@ -29,21 +29,3 @@ export async function GET(request: NextRequest) {
     return serverErrorResponse(error?.message || 'Failed to fetch notifications');
   }
 }
-
-// POST /api/notifications/mark-all-read - Mark all as read
-export async function POST(request: NextRequest) {
-  try {
-    const a = await auth(request); if ('error' in a) return a.error;
-    await connectDB();
-
-    await NotificationModel.updateMany(
-      { userId: a.uid, read: false },
-      { $set: { read: true } }
-    );
-
-    return successResponse({ message: 'All notifications marked as read' });
-  } catch (error: any) {
-    console.error('Mark all read error:', error);
-    return serverErrorResponse(error?.message || 'Failed to mark notifications as read');
-  }
-}

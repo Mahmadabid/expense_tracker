@@ -10,6 +10,7 @@ import {
   generateGuestToken,
   getIdToken
 } from '../firebase/auth';
+import { hasGuestDataToSync, syncGuestDataToCloud, getGuestDataCount } from '../utils/guestSync';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -92,7 +93,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signIn = async (): Promise<void> => {
     try {
       setLoading(true);
+      
+      // Check if there's guest data before signing in
+      const hasGuestData = hasGuestDataToSync();
+      const guestCounts = hasGuestData ? getGuestDataCount() : null;
+      
       await signInWithGoogle();
+      
+      // After successful sign in, sync guest data if any exists
+      if (hasGuestData && guestCounts) {
+        const confirmSync = window.confirm(
+          `You have ${guestCounts.entries} entries and ${guestCounts.loans} loans saved locally. ` +
+          `Would you like to sync them to your account?`
+        );
+        
+        if (confirmSync) {
+          try {
+            const result = await syncGuestDataToCloud();
+            
+            if (result.success) {
+              alert(
+                `Successfully synced ${result.entriesSynced} entries and ${result.loansSynced} loans to your account!`
+              );
+            } else {
+              alert(
+                `Partial sync completed: ${result.entriesSynced} entries, ${result.loansSynced} loans. ` +
+                `Errors: ${result.errors.join(', ')}`
+              );
+            }
+          } catch (syncError) {
+            console.error('Sync error:', syncError);
+            alert('Failed to sync guest data. Your local data is still saved.');
+          }
+        }
+      }
+      
       // User state will be updated by the auth state listener
     } catch (error) {
       console.error('Sign in error:', error);

@@ -33,15 +33,33 @@ export interface Entry {
   lastModifiedBy: string;
 }
 
+export type LoanStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
+export type AuditAction = 'created' | 'approved' | 'rejected' | 'payment_added' | 'payment_modified' | 
+                          'payment_deleted' | 'loan_modified' | 'status_changed' | 'collaborator_added' | 'amount_modified';
+
+export interface AuditEntry {
+  _id: string;
+  action: AuditAction;
+  userId: string;
+  userName: string;
+  timestamp: Date;
+  details: any;
+  hash: string;
+  previousHash?: string;
+  ipAddress?: string;
+}
+
 export interface Loan extends Entry {
   type: 'loan';
   direction: LoanDirection;
+  loanStatus: LoanStatus; // Approval status
   counterparty: {
     userId?: string; // If registered user
     name: string;
     email?: string;
     phone?: string;
   };
+  counterpartyUserId?: string; // For querying
   originalAmount: number;
   remainingAmount: number;
   dueDate?: Date;
@@ -49,6 +67,9 @@ export interface Loan extends Entry {
   comments: LoanComment[];
   collaborators: LoanCollaborator[];
   pendingApprovals: PendingApproval[];
+  auditTrail: AuditEntry[]; // Immutable history
+  rejectionReason?: string;
+  requiresMutualApproval: boolean;
   shareToken?: string; // For non-registered counterparty access
 }
 

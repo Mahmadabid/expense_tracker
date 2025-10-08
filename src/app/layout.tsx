@@ -7,12 +7,18 @@ import { ThemeProvider } from '@/lib/theme/ThemeContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Expense & Loan Tracker',
+  title: '💰 Expense & Loan Tracker',
   description: 'Track your expenses, income, and loans with collaborative features',
   keywords: ['expense tracker', 'loan tracker', 'finance', 'money management'],
   authors: [{ name: 'Expense Tracker Team' }],
   viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' }
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -25,7 +31,8 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" />
       </head>
       <body className={inter.className}>
         <ThemeProvider>

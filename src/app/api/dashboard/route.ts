@@ -22,16 +22,47 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const userId = decodedToken.uid;
 
-    // Fetch ALL active entries & loans for the user (no pagination)
-    const [entries, loans] = await Promise.all([
-      EntryModel.find({ userId, status: 'active' }).sort({ date: -1 }),
-      LoanModel.find({ $or: [{ userId }, { 'collaborators.userId': userId }], status: 'active' }).sort({ date: -1 }),
+    // Optimized: Use MongoDB aggregation to calculate totals directly in database
+    const [entryStats, loanStats, entries, loans] = await Promise.all([
+      // Calculate income/expense totals in DB
+      EntryModel.aggregate([
+        { $match: { userId, status: 'active' } },
+        { $group: {
+          _id: '$type',
+          total: { $sum: '$amount' }
+        }}
+      ]),
+      // Calculate loan totals in DB
+      LoanModel.aggregate([
+        { $match: { 
+          $or: [{ userId }, { 'collaborators.userId': userId }], 
+          status: 'active' 
+        }},
+        { $group: {
+          _id: '$direction',
+          total: { $sum: '$remainingAmount' }
+        }}
+      ]),
+      // Fetch only necessary fields for entries
+      EntryModel.find({ userId, status: 'active' })
+        .select('type amount date category description')
+        .sort({ date: -1 })
+        .lean(),
+      // Fetch only necessary fields for loans (no collaborators array needed for totals)
+      LoanModel.find({ 
+        $or: [{ userId }, { 'collaborators.userId': userId }], 
+        status: 'active' 
+      })
+        .select('direction remainingAmount amount date description counterpartyUserId loanStatus')
+        .sort({ date: -1 })
+        .lean(),
     ]);
-    // Calculate summaries
-    const totalIncome = entries.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-    const totalExpense = entries.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-    const totalLoaned = loans.filter((l: any) => l.direction === 'lent').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
-    const totalBorrowed = loans.filter((l: any) => l.direction === 'borrowed').reduce((sum: number, l: any) => sum + (l.remainingAmount || 0), 0);
+
+    // Extract totals from aggregation results
+    const totalIncome = entryStats.find(s => s._id === 'income')?.total || 0;
+    const totalExpense = entryStats.find(s => s._id === 'expense')?.total || 0;
+    const totalLoaned = loanStats.find(s => s._id === 'lent')?.total || 0;
+    const totalBorrowed = loanStats.find(s => s._id === 'borrowed')?.total || 0;
 
     const balance = totalIncome - totalExpense;
     const netLoan = totalLoaned - totalBorrowed; // positive means others owe user

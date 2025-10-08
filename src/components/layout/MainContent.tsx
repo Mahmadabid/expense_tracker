@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getAuthHeader } from '@/lib/firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import PendingLoanCard from '@/components/ui/PendingLoanCard';
+import AuditTrailViewer from '@/components/ui/AuditTrailViewer';
+import * as guestStorage from '@/lib/utils/guestStorage';
 
 // Constants moved outside component to prevent infinite loop
 const SUPPORTED_CURRENCIES = ['PKR', 'KWD', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'JPY'] as const;
@@ -221,6 +224,7 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
   const [showLoanAdditions, setShowLoanAdditions] = useState(false);
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -564,6 +568,17 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
                     {loan.loanAdditions.length} Addition{loan.loanAdditions.length !== 1 ? 's' : ''}
                   </span>
                 )}
+                {loan.auditTrail?.length > 0 && (
+                  <span
+                    onClick={() => setShowAuditTrail(!showAuditTrail)}
+                    className="cursor-pointer px-2 py-1.5 text-[11px] sm:text-xs font-medium bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-md flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    🔒 Audit Trail
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -634,6 +649,23 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Audit Trail Viewer */}
+          {showAuditTrail && loan.auditTrail?.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+              <div className="flex flex-col min-[450px]:flex-row min-[450px]:gap-3">
+                {/* Left spacer for alignment on desktop */}
+                <div className="hidden min-[450px]:block min-[450px]:w-12 flex-shrink-0"></div>
+
+                <div className="flex-1 min-w-0">
+                  <AuditTrailViewer 
+                    auditTrail={loan.auditTrail} 
+                    isVerified={loan.auditTrail.length > 0 ? loan.verifyAuditIntegrity?.()?.valid : undefined}
+                  />
                 </div>
               </div>
             </div>
@@ -1035,20 +1067,88 @@ export function MainContent() {
   const fetchDashboardData = async () => {
     setDataLoading(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const res = await fetch('/api/dashboard', { headers: authHeaders, cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        const normalizedData = normalizeCurrencies(data.data);
+      // Check if user is a guest
+      if (user?.isGuest) {
+        // Use local storage for guest users
+        const guestData = guestStorage.getGuestDashboard();
+        const normalizedData = normalizeCurrencies(guestData as any);
         setDashboardData(normalizedData);
         if (Array.isArray(normalizedData.loans)) {
           setLoansState(normalizedData.loans);
+        }
+      } else {
+        // Use API for authenticated users
+        const authHeaders = await getAuthHeader();
+        const res = await fetch('/api/dashboard', { headers: authHeaders, cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          const normalizedData = normalizeCurrencies(data.data);
+          setDashboardData(normalizedData);
+          if (Array.isArray(normalizedData.loans)) {
+            setLoansState(normalizedData.loans);
+          }
         }
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
     } finally {
       setDataLoading(false);
+    }
+  };
+
+  const handleApproveLoan = async (loanId: string) => {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loanId}/approve`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Update the loan in state
+        setLoansState(prev => {
+          if (!prev) return [data.data];
+          return prev.map(l => l._id === loanId ? data.data : l);
+        });
+        // Refresh dashboard to update summaries
+        await fetchDashboardData();
+        alert('Loan approved successfully!');
+      } else {
+        const error = await res.json();
+        alert(error.message || 'Failed to approve loan');
+      }
+    } catch (error) {
+      console.error('Error approving loan:', error);
+      throw error;
+    }
+  };
+
+  const handleRejectLoan = async (loanId: string, reason?: string) => {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loanId}/reject`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Update the loan in state
+        setLoansState(prev => {
+          if (!prev) return [data.data];
+          return prev.map(l => l._id === loanId ? data.data : l);
+        });
+        await fetchDashboardData();
+        alert('Loan rejected');
+      } else {
+        const error = await res.json();
+        alert(error.message || 'Failed to reject loan');
+      }
+    } catch (error) {
+      console.error('Error rejecting loan:', error);
+      throw error;
     }
   };
 
@@ -1204,42 +1304,89 @@ export function MainContent() {
 
     setSubmitting(true);
     try {
-      const authHeaders = await getAuthHeader();
-      const endpoint = modalType === 'loan' ? '/api/loans' : '/api/entries';
-      const payload: any = modalType === 'loan' ? {
-        amount: amt,
-        currency,
-        description: formData.description || undefined,
-        direction: formData.direction,
-        counterparty: {
-          name: formData.counterpartyName.trim(),
-          email: formData.counterpartyEmail.trim() || undefined
-        },
-        dueDate: formData.dueDate || undefined,
-      } : {
-        type: transactionType,
-        amount: amt,
-        currency,
-        description: formData.description || undefined,
-        category: formData.category || undefined,
-        date: new Date().toISOString(),
-      };
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
+      if (user?.isGuest) {
+        // Use local storage for guest users
+        if (modalType === 'loan') {
+          guestStorage.addGuestLoan({
+            userId: user._id,
+            type: 'loan',
+            amount: amt,
+            originalAmount: amt,
+            remainingAmount: amt,
+            currency: currency as any,
+            description: formData.description,
+            direction: formData.direction as any,
+            counterparty: {
+              name: formData.counterpartyName.trim(),
+              email: formData.counterpartyEmail.trim() || undefined,
+            },
+            loanStatus: 'accepted',
+            requiresMutualApproval: false,
+            date: new Date(),
+            status: 'active',
+            tags: [],
+            version: 1,
+            createdBy: user._id,
+            lastModifiedBy: user._id,
+          });
+        } else {
+          guestStorage.addGuestEntry({
+            userId: user._id,
+            type: transactionType,
+            amount: amt,
+            currency: currency as any,
+            description: formData.description,
+            category: formData.category,
+            date: new Date(),
+            status: 'active',
+            tags: [],
+            version: 1,
+            createdBy: user._id,
+            lastModifiedBy: user._id,
+          });
+        }
         closeModal();
         fetchDashboardData();
       } else {
-        const data = await res.json().catch(() => null);
-        setErrorMessage(data?.message || 'Failed to create entry');
+        // Use API for authenticated users
+        const authHeaders = await getAuthHeader();
+        const endpoint = modalType === 'loan' ? '/api/loans' : '/api/entries';
+        const payload: any = modalType === 'loan' ? {
+          amount: amt,
+          currency,
+          description: formData.description || undefined,
+          direction: formData.direction,
+          counterparty: {
+            name: formData.counterpartyName.trim(),
+            email: formData.counterpartyEmail.trim() || undefined
+          },
+          dueDate: formData.dueDate || undefined,
+        } : {
+          type: transactionType,
+          amount: amt,
+          currency,
+          description: formData.description || undefined,
+          category: formData.category || undefined,
+          date: new Date().toISOString(),
+        };
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          closeModal();
+          fetchDashboardData();
+        } else {
+          const data = await res.json().catch(() => null);
+          setErrorMessage(data?.message || 'Failed to create entry');
+        }
       }
-    } catch {
-      setErrorMessage('Network error occurred');
+    } catch (err) {
+      console.error('Submit error:', err);
+      setErrorMessage(user?.isGuest ? 'Failed to save locally' : 'Network error occurred');
     } finally {
       setSubmitting(false);
     }
@@ -1545,6 +1692,39 @@ export function MainContent() {
               </div>
             ) : getFilteredActivity().length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
+                {/* Pending Loan Requests Section */}
+                {(() => {
+                  const pendingLoans = getFilteredActivity().filter((item: any) => 
+                    item.isLoan && (item as any).loanStatus === 'pending'
+                  );
+                  
+                  if (pendingLoans.length > 0) {
+                    return (
+                      <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-3 px-2">
+                          <span className="text-yellow-600 font-semibold text-sm">
+                            ⚠️ Pending Loan Approvals ({pendingLoans.length})
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {pendingLoans.map((loan: any) => (
+                            <PendingLoanCard
+                              key={loan._id}
+                              loan={loan}
+                              onApprove={handleApproveLoan}
+                              onReject={handleRejectLoan}
+                              isCounterparty={loan.counterpartyUserId === (user?.firebaseUid || user?._id)}
+                              currentUserId={user?.firebaseUid || user?._id || ''}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                
+                {/* Regular Activity Items */}
                 {getFilteredActivity().map((item: any) => (
                   item.isLoan ? (
                     <LoanCard

@@ -84,25 +84,86 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const prevVersion = loan.version || 1;
     const nextVersion = prevVersion + 1;
 
-    const updateResult = await LoanModel.updateOne(
-      { _id: loan._id, version: prevVersion },
-      {
-        $set: {
-          encryptedData: newEncryptedData,
-          status: newStatus,
-          lastModifiedBy: a.uid,
-          version: nextVersion,
-        },
-      }
-    );
+    // Get user info for audit trail
+    const { UserModel, NotificationModel } = await import('@/lib/models');
+    const user = await UserModel.findByFirebaseUid(a.uid);
+    const userName = user?.displayName || 'Unknown User';
 
-    if (updateResult.modifiedCount === 0) {
-      return errorResponse('Concurrent modification detected. Please retry.');
+    // Update loan with new encrypted data and add audit entry
+    const refreshed = await LoanModel.findById(loan._id);
+    if (!refreshed) return errorResponse('Loan not found');
+
+    // Update encrypted data
+    (refreshed as any).encryptedData = newEncryptedData;
+    refreshed.status = newStatus;
+    refreshed.lastModifiedBy = a.uid;
+    refreshed.version = nextVersion;
+
+    // Add audit entry
+    refreshed.addAuditEntry('payment_added', a.uid, userName, {
+      paymentId: newPayment._id.toString(),
+      amount,
+      method: method || 'not specified',
+      date: newPayment.date,
+      previousRemaining: remainingAmount,
+      newRemaining,
+      notes: notes || '',
+    });
+
+    await refreshed.save();
+
+    // Send notification to the other party
+    const otherPartyId = loan.userId === a.uid ? counterparty?.userId : loan.userId;
+    if (otherPartyId) {
+      await NotificationModel.create({
+        userId: otherPartyId,
+        type: 'payment_added',
+        title: 'Payment Added to Loan',
+        message: `${userName} added a payment of ${loan.currency} ${amount} to your loan`,
+        relatedId: String(loan._id),
+        relatedModel: 'Loan',
+        actionUrl: `/loans/${String(loan._id)}`,
+        priority: 'normal',
+        metadata: {
+          loanId: String(loan._id),
+          paymentId: newPayment._id.toString(),
+          amount,
+          currency: loan.currency,
+          remainingAmount: newRemaining,
+        },
+      });
+    }
+
+    // If loan is fully paid, send notification
+    if (newStatus === 'paid') {
+      if (otherPartyId) {
+        await NotificationModel.create({
+          userId: otherPartyId,
+          type: 'loan_settled',
+          title: 'Loan Fully Paid',
+          message: `Your loan with ${userName} has been fully settled!`,
+          relatedId: String(loan._id),
+          relatedModel: 'Loan',
+          actionUrl: `/loans/${String(loan._id)}`,
+          priority: 'high',
+        });
+      }
+      // Also notify the payer
+      await NotificationModel.create({
+        userId: a.uid,
+        type: 'loan_settled',
+        title: 'Loan Fully Paid',
+        message: `Congratulations! You've fully paid off your loan.`,
+        relatedId: String(loan._id),
+        relatedModel: 'Loan',
+        actionUrl: `/loans/${String(loan._id)}`,
+        priority: 'high',
+      });
     }
 
   // Fetch updated loan with decryption
-  const refreshed = await LoanModel.findById(loan._id);
-  return successResponse({ payment: newPayment, loan: refreshed }, 'Payment added successfully', 201);
+  const finalLoan = await LoanModel.findById(loan._id);
+  return successResponse({ payment: newPayment, loan: finalLoan }, 'Payment added successfully', 201);
   } catch (error: any) {
     console.error('Payment creation error:', error);
     return serverErrorResponse(error?.message || 'Failed to add payment');

@@ -8,6 +8,11 @@ interface LoanDocument extends Omit<Loan, '_id'>, Document {
   canUserEdit(userId: string): boolean;
   canUserAddPayment(userId: string): boolean;
   requiresApproval(action: string, userId: string): boolean;
+  addAuditEntry(action: string, userId: string, userName: string, details: any, ipAddress?: string): any;
+  verifyAuditIntegrity(): { valid: boolean; error?: string };
+  acceptLoan(userId: string, userName: string): LoanDocument;
+  rejectLoan(userId: string, userName: string, reason?: string): LoanDocument;
+  encryptedData?: string;
 }
 
 interface LoanModel extends Model<LoanDocument> {
@@ -67,6 +72,48 @@ const LoanCommentSchema = new Schema({
 }, {
   timestamps: true,
   _id: true,
+});
+
+// Audit Trail Schema for immutable history
+const AuditEntrySchema = new Schema({
+  action: {
+    type: String,
+    required: true,
+    enum: ['created', 'approved', 'rejected', 'payment_added', 'payment_modified', 'payment_deleted', 
+           'loan_modified', 'status_changed', 'collaborator_added', 'amount_modified'],
+  },
+  userId: {
+    type: String,
+    required: true,
+  },
+  userName: {
+    type: String,
+    required: true,
+  },
+  timestamp: {
+    type: Date,
+    required: true,
+    default: Date.now,
+    immutable: true, // Cannot be changed once set
+  },
+  details: {
+    type: Schema.Types.Mixed,
+    required: true,
+  },
+  // Hash of previous entry + current data for integrity verification
+  hash: {
+    type: String,
+    required: true,
+  },
+  previousHash: {
+    type: String,
+  },
+  ipAddress: {
+    type: String,
+  },
+}, {
+  _id: true,
+  timestamps: false, // Use our own timestamp field
 });
 
 const LoanCollaboratorSchema = new Schema<LoanCollaborator>({
@@ -175,6 +222,14 @@ const LoanSchema = new Schema(
       type: Date,
       required: true,
     },
+    // Loan approval status - pending means waiting for counterparty acceptance
+    loanStatus: {
+      type: String,
+      required: true,
+      enum: ['pending', 'accepted', 'rejected', 'cancelled'],
+      default: 'pending',
+      index: true,
+    },
     status: {
       type: String,
       required: true,
@@ -215,6 +270,18 @@ const LoanSchema = new Schema(
     },
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
+    // Immutable audit trail for anti-cheating
+    auditTrail: [AuditEntrySchema],
+    // Rejection reason if loan was rejected
+    rejectionReason: {
+      type: String,
+      maxlength: 500,
+    },
+    // Mutual verification - require both parties to acknowledge significant changes
+    requiresMutualApproval: {
+      type: Boolean,
+      default: true,
+    },
     shareToken: {
       type: String,
       sparse: true,
@@ -232,6 +299,8 @@ const LoanSchema = new Schema(
 // Indexes
 LoanSchema.index({ userId: 1, direction: 1 });
 LoanSchema.index({ userId: 1, status: 1 });
+LoanSchema.index({ userId: 1, loanStatus: 1 });
+LoanSchema.index({ counterpartyUserId: 1, loanStatus: 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
 // Note: counterpartyUserId index is defined in the schema field with index: true
 LoanSchema.index({ dueDate: 1 });
@@ -507,6 +576,119 @@ LoanSchema.methods.canUserAddPayment = function(userId: string) {
 LoanSchema.methods.requiresApproval = function(action: string, userId: string) {
   const destructiveActions = ['delete', 'close'];
   return destructiveActions.includes(action) && this.collaborators.length > 0;
+};
+
+LoanSchema.methods.addAuditEntry = function(
+  action: string,
+  userId: string,
+  userName: string,
+  details: any,
+  ipAddress?: string
+) {
+  // Generate hash for blockchain-like integrity
+  const crypto = require('crypto');
+  const previousHash = this.auditTrail.length > 0 
+    ? this.auditTrail[this.auditTrail.length - 1].hash 
+    : 'genesis';
+  
+  const dataToHash = JSON.stringify({
+    action,
+    userId,
+    userName,
+    timestamp: new Date().toISOString(),
+    details,
+    previousHash,
+  });
+  
+  const hash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+  
+  const auditEntry = {
+    _id: new mongoose.Types.ObjectId(),
+    action,
+    userId,
+    userName,
+    timestamp: new Date(),
+    details,
+    hash,
+    previousHash,
+    ipAddress,
+  };
+  
+  this.auditTrail.push(auditEntry);
+  return auditEntry;
+};
+
+LoanSchema.methods.verifyAuditIntegrity = function() {
+  const crypto = require('crypto');
+  
+  for (let i = 0; i < this.auditTrail.length; i++) {
+    const entry = this.auditTrail[i];
+    const expectedPreviousHash = i === 0 ? 'genesis' : this.auditTrail[i - 1].hash;
+    
+    if (entry.previousHash !== expectedPreviousHash) {
+      return { valid: false, error: `Audit trail broken at entry ${i}` };
+    }
+    
+    // Verify hash
+    const dataToHash = JSON.stringify({
+      action: entry.action,
+      userId: entry.userId,
+      userName: entry.userName,
+      timestamp: entry.timestamp.toISOString(),
+      details: entry.details,
+      previousHash: entry.previousHash,
+    });
+    
+    const calculatedHash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+    
+    if (calculatedHash !== entry.hash) {
+      return { valid: false, error: `Hash mismatch at entry ${i}` };
+    }
+  }
+  
+  return { valid: true };
+};
+
+LoanSchema.methods.acceptLoan = function(userId: string, userName: string) {
+  if (this.loanStatus !== 'pending') {
+    throw new Error('Loan is not in pending status');
+  }
+  
+  // Only counterparty can accept
+  if (this.counterpartyUserId !== userId) {
+    throw new Error('Only the counterparty can accept this loan');
+  }
+  
+  this.loanStatus = 'accepted';
+  this.addAuditEntry('approved', userId, userName, {
+    message: 'Loan accepted by counterparty',
+    previousStatus: 'pending',
+    newStatus: 'accepted',
+  });
+  
+  return this;
+};
+
+LoanSchema.methods.rejectLoan = function(userId: string, userName: string, reason?: string) {
+  if (this.loanStatus !== 'pending') {
+    throw new Error('Loan is not in pending status');
+  }
+  
+  // Only counterparty can reject
+  if (this.counterpartyUserId !== userId) {
+    throw new Error('Only the counterparty can reject this loan');
+  }
+  
+  this.loanStatus = 'rejected';
+  this.rejectionReason = reason;
+  this.addAuditEntry('rejected', userId, userName, {
+    message: 'Loan rejected by counterparty',
+    reason: reason || 'No reason provided',
+    previousStatus: 'pending',
+    newStatus: 'rejected',
+  });
+  
+  return this;
 };
 
 // Static methods

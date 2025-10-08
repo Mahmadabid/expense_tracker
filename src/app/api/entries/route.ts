@@ -24,8 +24,12 @@ export async function GET(request: NextRequest) {
     const query: any = { userId: decodedToken.uid, status };
     if (type) query.type = type;
 
-    // Don't use .lean() - we need mongoose middleware to decrypt data
-    const entries = await EntryModel.find(query).sort({ date: -1 }).limit(limit);
+    // Optimized: Select only necessary fields for list view
+    const entries = await EntryModel.find(query)
+      .select('type amount date category description status tags createdAt')
+      .sort({ date: -1 })
+      .limit(limit)
+      .lean();
     return successResponse(entries);
   } catch (error) {
     console.error('Entries fetch error:', error);

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
-import { LoanModel, UserModel } from '@/lib/models';
+import { LoanModel, UserModel, NotificationModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, errorResponse } from '@/lib/utils/apiResponse';
 
 // GET /api/loans - list loans for user (owned or collaborator)
@@ -30,8 +30,13 @@ export async function GET(request: NextRequest) {
     if (status) base.status = status;
     if (direction) base.direction = direction;
 
-    // Remove .lean() to allow mongoose middleware to decrypt
-    const loans = await LoanModel.find(base).sort({ date: -1 }).limit(limit);
+    // Optimized: Select only necessary fields, exclude full collaborators array
+    // Use projection to fetch only user's relevant collaborator data
+    const loans = await LoanModel.find(base)
+      .select('amount remainingAmount description direction status date dueDate currency counterpartyUserId loanStatus createdBy lastModifiedBy version tags')
+      .sort({ date: -1 })
+      .limit(limit)
+      .lean();
 
     return successResponse(loans);
   } catch (err) {
@@ -98,6 +103,10 @@ export async function POST(request: NextRequest) {
     };
     const encryptedData = encryptObject(sensitivePayload);
 
+    // Get creator's user info for audit trail
+    const creator = await UserModel.findByFirebaseUid(userId);
+    const creatorName = creator?.displayName || 'Unknown User';
+
     const loan = await LoanModel.create({
       userId,
       type: 'loan',
@@ -105,6 +114,7 @@ export async function POST(request: NextRequest) {
       currency,
       date: new Date(),
       status: 'active',
+      loanStatus: counterpartyUserId ? 'pending' : 'accepted', // If counterparty is in system, require approval
       // store empty arrays for tags at schema level (tags inside encrypted)
       tags: [],
       version: 1,
@@ -114,11 +124,52 @@ export async function POST(request: NextRequest) {
       counterpartyUserId, // Store at top level for querying
       collaborators: [],
       pendingApprovals: [],
+      auditTrail: [],
+      requiresMutualApproval: true,
       ...(body.category ? { category: undefined } : {}),
       ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
     });
 
+    // Add initial audit entry
+    loan.addAuditEntry('created', userId, creatorName, {
+      amount,
+      currency,
+      direction,
+      counterparty: counterparty.name,
+      description: description || '',
+    });
+
+    await loan.save();
+
     console.log('[LOAN API] Loan created successfully, has encryptedData:', !!(loan as any).encryptedData);
+
+    // If counterparty is a registered user, send notification
+    if (counterpartyUserId) {
+      const notificationMessage = direction === 'lent'
+        ? `${creatorName} has recorded lending you ${currency} ${amount}`
+        : `${creatorName} has recorded borrowing ${currency} ${amount} from you`;
+
+      await NotificationModel.create({
+        userId: counterpartyUserId,
+        type: 'loan_request',
+        title: 'New Loan Request',
+        message: notificationMessage,
+        relatedId: String(loan._id),
+        relatedModel: 'Loan',
+        actionUrl: `/loans/${String(loan._id)}`,
+        priority: 'high',
+        metadata: {
+          loanId: String(loan._id),
+          creatorId: userId,
+          creatorName,
+          amount,
+          currency,
+          direction: direction === 'lent' ? 'borrowed' : 'lent', // Flip for counterparty perspective
+        },
+      });
+
+      console.log('[LOAN API] Notification sent to counterparty:', counterpartyUserId);
+    }
 
     return successResponse(loan, 'Loan created successfully', 201);
   } catch (error: any) {

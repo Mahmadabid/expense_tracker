@@ -11,8 +11,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const a = await auth(request); if ('error' in a) return a.error;
     const params = await context.params;
     await connectDB();
-    const loan = await LoanModel.findById(params.id);
-    if (!loan) return notFoundResponse('Loan not found');
+    // Optimized: Only fetch collaborator matching the authenticated user
+    const loan = await LoanModel.findOne({
+      _id: params.id,
+      $or: [
+        { userId: a.uid },
+        { counterpartyUserId: a.uid },
+        { 'collaborators': { $elemMatch: { userId: a.uid, status: 'accepted' } } }
+      ]
+    });
+    if (!loan) return notFoundResponse('Loan not found or access denied');
 
     const body = await request.json();
     const action = body.action;
@@ -94,14 +102,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const a = await auth(request); if ('error' in a) return a.error;
     const params = await context.params;
     await connectDB();
-    // Remove .lean() to allow decryption middleware
-    const loan = await LoanModel.findById(params.id);
-    if (!loan) return notFoundResponse('Loan not found');
-    // Access check
-    if (loan.userId !== a.uid && 
-        !(loan as any).collaborators?.some((c: any) => c.userId === a.uid) &&
-        (loan as any).counterparty?.userId !== a.uid) {
-      return unauthorizedResponse('Access denied');
+    
+    // Optimized: Query with access filter built-in, no post-query filtering needed
+    const loan = await LoanModel.findOne({
+      _id: params.id,
+      $or: [
+        { userId: a.uid },
+        { counterpartyUserId: a.uid },
+        { 'collaborators.userId': a.uid }
+      ]
+    });
+    
+    if (!loan) {
+      return notFoundResponse('Loan not found or access denied');
     }
     return successResponse(loan);
   } catch (err) {
@@ -117,15 +130,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const params = await context.params;
     await connectDB();
 
-    const loan = await LoanModel.findById(params.id);
-    if (!loan) return notFoundResponse('Loan not found');
+    // Optimized: Query with edit permission filter built-in
+    const loan = await LoanModel.findOne({
+      _id: params.id,
+      $or: [
+        { userId: a.uid },
+        { 'collaborators': { $elemMatch: { 
+          userId: a.uid, 
+          status: 'accepted',
+          role: { $in: ['owner', 'collaborator'] }
+        }}}
+      ]
+    });
     
-    // Check if user can edit this loan
-    const canEdit = loan.userId === a.uid || 
-                   loan.collaborators?.some(c => c.userId === a.uid && c.status === 'accepted' && 
-                   (c.role === 'owner' || c.role === 'collaborator'));
-    
-    if (!canEdit) return unauthorizedResponse('Not allowed');
+    if (!loan) return unauthorizedResponse('Loan not found or not allowed');
 
     const body = await request.json();
     const allowed = ['description','amount','status','dueDate','counterparty'];
@@ -173,17 +191,23 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const a = await auth(request); if ('error' in a) return a.error;
     const params = await context.params;
     await connectDB();
-    const loan = await LoanModel.findById(params.id);
-    if (!loan) return notFoundResponse('Loan not found');
     
-    // Check if user can edit this loan
-    const canEdit = loan.userId === a.uid || 
-                   loan.collaborators?.some(c => c.userId === a.uid && c.status === 'accepted' && 
-                   (c.role === 'owner' || c.role === 'collaborator'));
+    // Optimized: Delete directly with filter, no need to fetch first
+    const result = await LoanModel.deleteOne({
+      _id: params.id,
+      $or: [
+        { userId: a.uid },
+        { 'collaborators': { $elemMatch: { 
+          userId: a.uid, 
+          status: 'accepted',
+          role: { $in: ['owner', 'collaborator'] }
+        }}}
+      ]
+    });
     
-    if (!canEdit) return unauthorizedResponse('Not allowed');
-
-    await LoanModel.deleteOne({ _id: loan._id });
+    if (result.deletedCount === 0) {
+      return unauthorizedResponse('Loan not found or not allowed');
+    }
 
     return successResponse({ id: params.id }, 'Loan deleted');
   } catch (err) {
