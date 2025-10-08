@@ -81,8 +81,11 @@ export async function syncGuestDataToCloud(): Promise<SyncResult> {
             currency: loan.currency,
             description: loan.description,
             direction: loan.direction,
-            counterparty: loan.counterparty.name,
-            counterpartyEmail: loan.counterparty.email,
+            isPersonal: loan.isPersonal || false,
+            counterparty: loan.counterparty ? {
+              name: loan.counterparty.name,
+              email: loan.counterparty.email,
+            } : undefined,
             dueDate: loan.dueDate,
             tags: loan.tags,
           }),

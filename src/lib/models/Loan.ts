@@ -222,7 +222,15 @@ const LoanSchema = new Schema(
       type: Date,
       required: true,
     },
+    // Personal loan flag - if true, no counterparty involvement needed
+    isPersonal: {
+      type: Boolean,
+      required: true,
+      default: false,
+      index: true,
+    },
     // Loan approval status - pending means waiting for counterparty acceptance
+    // For personal loans, this is automatically 'accepted'
     loanStatus: {
       type: String,
       required: true,
@@ -278,6 +286,7 @@ const LoanSchema = new Schema(
       maxlength: 500,
     },
     // Mutual verification - require both parties to acknowledge significant changes
+    // For personal loans, this is automatically false
     requiresMutualApproval: {
       type: Boolean,
       default: true,
@@ -300,6 +309,7 @@ const LoanSchema = new Schema(
 LoanSchema.index({ userId: 1, direction: 1 });
 LoanSchema.index({ userId: 1, status: 1 });
 LoanSchema.index({ userId: 1, loanStatus: 1 });
+LoanSchema.index({ userId: 1, isPersonal: 1 }); // Filter personal vs collaborative loans
 LoanSchema.index({ counterpartyUserId: 1, loanStatus: 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
 // Note: counterpartyUserId index is defined in the schema field with index: true

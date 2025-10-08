@@ -56,22 +56,27 @@ export async function POST(request: NextRequest) {
     if (!decoded) return unauthorizedResponse('Invalid token');
 
     const body = await request.json();
-    const { amount, currency, description, direction, counterparty, dueDate, tags } = body;
+    const { amount, currency, description, direction, counterparty, dueDate, tags, isPersonal } = body;
 
     // Basic validation
     if (!amount || amount <= 0) return errorResponse('Amount must be positive');
     if (!currency) return errorResponse('Currency is required');
     if (!direction || !['lent','borrowed'].includes(direction)) return errorResponse('Direction must be lent or borrowed');
-    if (!counterparty || !counterparty.name) return errorResponse('Counterparty name is required');
+    
+    // For collaborative loans, counterparty is required; for personal loans, it's optional
+    const isPersonalLoan = isPersonal === true;
+    if (!isPersonalLoan && (!counterparty || !counterparty.name)) {
+      return errorResponse('Counterparty name is required for collaborative loans');
+    }
 
     await connectDB();
     const userId = decoded.uid;
 
-    console.log('[LOAN API] Creating loan with amount:', amount);
+    console.log('[LOAN API] Creating loan with amount:', amount, 'isPersonal:', isPersonalLoan);
 
-    // Look up counterparty user by email if provided
+    // Look up counterparty user by email if provided (only for collaborative loans)
     let counterpartyUserId = undefined;
-    if (counterparty.email) {
+    if (!isPersonalLoan && counterparty?.email) {
       const counterpartyUser = await UserModel.findOne({ 
         email: counterparty.email.toLowerCase().trim() 
       });
@@ -85,22 +90,29 @@ export async function POST(request: NextRequest) {
 
     // Build sensitive bundle and encrypt here to avoid dependency on middleware timing
     const { encryptObject } = await import('@/lib/utils/encryption');
-    const sensitivePayload = {
+    const sensitivePayload: any = {
       amount,
       originalAmount: amount,
       remainingAmount: amount,
       description: description || '',
-      counterparty: {
+      payments: [],
+      comments: [],
+    };
+
+    // Add counterparty only for collaborative loans
+    if (!isPersonalLoan && counterparty) {
+      sensitivePayload.counterparty = {
         userId: counterpartyUserId || counterparty.userId || undefined,
         name: counterparty.name,
         email: counterparty.email || undefined,
         phone: counterparty.phone || undefined,
-      },
-      payments: [],
-      comments: [],
-      category: body.category || '',
-      tags: tags || [],
-    };
+      };
+    }
+    
+    // Add category and tags
+    sensitivePayload.category = body.category || '';
+    sensitivePayload.tags = tags || [];
+    
     const encryptedData = encryptObject(sensitivePayload);
 
     // Get creator's user info for audit trail
@@ -114,18 +126,20 @@ export async function POST(request: NextRequest) {
       currency,
       date: new Date(),
       status: 'active',
-      loanStatus: counterpartyUserId ? 'pending' : 'accepted', // If counterparty is in system, require approval
+      isPersonal: isPersonalLoan,
+      // Personal loans are auto-accepted; collaborative loans need approval if counterparty is registered
+      loanStatus: isPersonalLoan ? 'accepted' : (counterpartyUserId ? 'pending' : 'accepted'),
       // store empty arrays for tags at schema level (tags inside encrypted)
       tags: [],
       version: 1,
       createdBy: userId,
       lastModifiedBy: userId,
       direction,
-      counterpartyUserId, // Store at top level for querying
+      counterpartyUserId: isPersonalLoan ? undefined : counterpartyUserId, // No counterparty for personal loans
       collaborators: [],
       pendingApprovals: [],
       auditTrail: [],
-      requiresMutualApproval: true,
+      requiresMutualApproval: isPersonalLoan ? false : true, // Personal loans don't need mutual approval
       ...(body.category ? { category: undefined } : {}),
       ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
     });
@@ -135,16 +149,17 @@ export async function POST(request: NextRequest) {
       amount,
       currency,
       direction,
-      counterparty: counterparty.name,
+      isPersonal: isPersonalLoan,
+      counterparty: isPersonalLoan ? 'Personal tracking' : (counterparty?.name || 'Unknown'),
       description: description || '',
     });
 
     await loan.save();
 
-    console.log('[LOAN API] Loan created successfully, has encryptedData:', !!(loan as any).encryptedData);
+    console.log('[LOAN API] Loan created successfully, isPersonal:', isPersonalLoan, 'has encryptedData:', !!(loan as any).encryptedData);
 
-    // If counterparty is a registered user, send notification
-    if (counterpartyUserId) {
+    // Only send notification for collaborative loans with registered counterparty
+    if (!isPersonalLoan && counterpartyUserId) {
       const notificationMessage = direction === 'lent'
         ? `${creatorName} has recorded lending you ${currency} ${amount}`
         : `${creatorName} has recorded borrowing ${currency} ${amount} from you`;

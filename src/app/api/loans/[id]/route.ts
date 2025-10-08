@@ -160,10 +160,14 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         } else if (key === 'dueDate') {
           loan.dueDate = body.dueDate ? new Date(body.dueDate) : undefined;
         } else if (key === 'counterparty') {
+          // Can't update counterparty for personal loans
+          if ((loan as any).isPersonal) return errorResponse('Cannot update counterparty for personal loans');
           if (!body.counterparty.name) return errorResponse('Counterparty name required');
-          loan.counterparty.name = body.counterparty.name;
-          loan.counterparty.email = body.counterparty.email || undefined;
-          loan.counterparty.phone = body.counterparty.phone || undefined;
+          if (loan.counterparty) {
+            loan.counterparty.name = body.counterparty.name;
+            loan.counterparty.email = body.counterparty.email || undefined;
+            loan.counterparty.phone = body.counterparty.phone || undefined;
+          }
         } else {
           (loan as any)[key] = body[key];
         }

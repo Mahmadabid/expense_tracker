@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const userId = decodedToken.uid;
 
-    // Optimized: Use MongoDB aggregation to calculate totals directly in database
-    const [entryStats, loanStats, entries, loans] = await Promise.all([
+    // Optimized: Use MongoDB aggregation for entries (non-encrypted data)
+    const [entryStats, entries, loans] = await Promise.all([
       // Calculate income/expense totals in DB
       EntryModel.aggregate([
         { $match: { userId, status: 'active' } },
@@ -32,37 +32,36 @@ export async function GET(request: NextRequest) {
           total: { $sum: '$amount' }
         }}
       ]),
-      // Calculate loan totals in DB
-      LoanModel.aggregate([
-        { $match: { 
-          $or: [{ userId }, { 'collaborators.userId': userId }], 
-          status: 'active' 
-        }},
-        { $group: {
-          _id: '$direction',
-          total: { $sum: '$remainingAmount' }
-        }}
-      ]),
       // Fetch only necessary fields for entries
       EntryModel.find({ userId, status: 'active' })
         .select('type amount date category description')
         .sort({ date: -1 })
         .lean(),
-      // Fetch only necessary fields for loans (no collaborators array needed for totals)
+      // Fetch loans - need to decrypt so don't use .lean()
+      // Can't use aggregation because remainingAmount is encrypted
       LoanModel.find({ 
         $or: [{ userId }, { 'collaborators.userId': userId }], 
         status: 'active' 
       })
-        .select('direction remainingAmount amount date description counterpartyUserId loanStatus')
-        .sort({ date: -1 })
-        .lean(),
+        .select('encryptedData currency date counterpartyUserId loanStatus direction status isPersonal dueDate version createdBy lastModifiedBy')
+        .sort({ date: -1 }),
     ]);
 
-    // Extract totals from aggregation results
+    // Extract entry totals from aggregation
     const totalIncome = entryStats.find(s => s._id === 'income')?.total || 0;
     const totalExpense = entryStats.find(s => s._id === 'expense')?.total || 0;
-    const totalLoaned = loanStats.find(s => s._id === 'lent')?.total || 0;
-    const totalBorrowed = loanStats.find(s => s._id === 'borrowed')?.total || 0;
+    
+    // Calculate loan totals after decryption (middleware will decrypt)
+    let totalLoaned = 0;
+    let totalBorrowed = 0;
+    loans.forEach((loan: any) => {
+      const remaining = loan.remainingAmount || 0;
+      if (loan.direction === 'lent') {
+        totalLoaned += remaining;
+      } else if (loan.direction === 'borrowed') {
+        totalBorrowed += remaining;
+      }
+    });
 
     const balance = totalIncome - totalExpense;
     const netLoan = totalLoaned - totalBorrowed; // positive means others owe user

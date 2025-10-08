@@ -53,7 +53,8 @@ export interface Loan extends Entry {
   type: 'loan';
   direction: LoanDirection;
   loanStatus: LoanStatus; // Approval status
-  counterparty: {
+  isPersonal: boolean; // True for personal tracking, false for collaborative loans
+  counterparty?: {
     userId?: string; // If registered user
     name: string;
     email?: string;

@@ -1316,6 +1316,7 @@ export function MainContent() {
             currency: currency as any,
             description: formData.description,
             direction: formData.direction as any,
+            isPersonal: false, // Guest loans with counterparty name are collaborative
             counterparty: {
               name: formData.counterpartyName.trim(),
               email: formData.counterpartyEmail.trim() || undefined,
