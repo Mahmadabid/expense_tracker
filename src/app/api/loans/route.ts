@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
-import { LoanModel } from '@/lib/models';
+import { LoanModel, UserModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, errorResponse } from '@/lib/utils/apiResponse';
 
 // GET /api/loans - list loans for user (owned or collaborator)
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       $or: [ 
         { userId: decoded.uid }, 
         { 'collaborators.userId': decoded.uid },
-        { 'counterparty.userId': decoded.uid }  // Allow counterparty to see their loans
+        { counterpartyUserId: decoded.uid }  // Allow counterparty to see their loans
       ] 
     };
     if (status) base.status = status;
@@ -64,6 +64,20 @@ export async function POST(request: NextRequest) {
 
     console.log('[LOAN API] Creating loan with amount:', amount);
 
+    // Look up counterparty user by email if provided
+    let counterpartyUserId = undefined;
+    if (counterparty.email) {
+      const counterpartyUser = await UserModel.findOne({ 
+        email: counterparty.email.toLowerCase().trim() 
+      });
+      if (counterpartyUser) {
+        counterpartyUserId = counterpartyUser.firebaseUid;
+        console.log('[LOAN API] Found counterparty user:', counterpartyUserId);
+      } else {
+        console.log('[LOAN API] Counterparty email not found in system:', counterparty.email);
+      }
+    }
+
     // Build sensitive bundle and encrypt here to avoid dependency on middleware timing
     const { encryptObject } = await import('@/lib/utils/encryption');
     const sensitivePayload = {
@@ -72,7 +86,7 @@ export async function POST(request: NextRequest) {
       remainingAmount: amount,
       description: description || '',
       counterparty: {
-        userId: counterparty.userId || undefined,
+        userId: counterpartyUserId || counterparty.userId || undefined,
         name: counterparty.name,
         email: counterparty.email || undefined,
         phone: counterparty.phone || undefined,
@@ -97,6 +111,7 @@ export async function POST(request: NextRequest) {
       createdBy: userId,
       lastModifiedBy: userId,
       direction,
+      counterpartyUserId, // Store at top level for querying
       collaborators: [],
       pendingApprovals: [],
       ...(body.category ? { category: undefined } : {}),

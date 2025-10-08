@@ -211,7 +211,7 @@ const LoanSchema = new Schema(
     // The full counterparty object (with email, phone, etc) is in encryptedData
     counterpartyUserId: {
       type: String,
-      sparse: true, // Allow null/undefined
+      index: true, // Index for queries - sparse by default for optional fields
     },
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
@@ -233,7 +233,7 @@ const LoanSchema = new Schema(
 LoanSchema.index({ userId: 1, direction: 1 });
 LoanSchema.index({ userId: 1, status: 1 });
 LoanSchema.index({ 'collaborators.userId': 1 });
-LoanSchema.index({ counterpartyUserId: 1 }); // For counterparty to find their loans
+// Note: counterpartyUserId index is defined in the schema field with index: true
 LoanSchema.index({ dueDate: 1 });
 
 // Pre-save middleware - Encrypt sensitive data BEFORE Mongoose processes it
@@ -258,6 +258,7 @@ LoanSchema.pre('validate', function(next) {
         description: doc.description || '',
         counterparty: doc.counterparty || null,
         payments: doc.payments || [],
+        loanAdditions: doc.loanAdditions || [],
         comments: doc.comments || [],
         // Encrypt category and tags as well (non-queryable sensitive data)
         category: doc.category || '',
@@ -279,8 +280,9 @@ LoanSchema.pre('validate', function(next) {
       delete doc.remainingAmount;
       delete doc.description;
       delete doc.counterparty;
-      delete doc.payments;
-      delete doc.comments;
+  delete doc.payments;
+  delete doc.loanAdditions; // ensure additions not stored in plaintext
+  delete doc.comments;
       delete doc.category;
       
       // Keep tags at schema level for querying if needed, but also store encrypted
@@ -294,8 +296,9 @@ LoanSchema.pre('validate', function(next) {
         delete doc._doc.remainingAmount;
         delete doc._doc.description;
         delete doc._doc.counterparty;
-        delete doc._doc.payments;
-        delete doc._doc.comments;
+  delete doc._doc.payments;
+  delete doc._doc.loanAdditions;
+  delete doc._doc.comments;
         delete doc._doc.category;
         doc._doc.tags = [];
       }
@@ -321,6 +324,7 @@ LoanSchema.pre('save', function(next) {
   delete doc.description;
   delete doc.counterparty;
   delete doc.payments;
+  delete doc.loanAdditions; // remove plaintext additions
   delete doc.comments;
   delete doc.category;
   
@@ -335,8 +339,9 @@ LoanSchema.pre('save', function(next) {
     delete doc._doc.remainingAmount;
     delete doc._doc.description;
     delete doc._doc.counterparty;
-    delete doc._doc.payments;
-    delete doc._doc.comments;
+  delete doc._doc.payments;
+  delete doc._doc.loanAdditions;
+  delete doc._doc.comments;
     delete doc._doc.category;
     if (!Array.isArray(doc._doc.tags)) {
       doc._doc.tags = [];
@@ -363,6 +368,7 @@ function decryptLoanData(doc: any) {
       description?: string;
       counterparty: any;
       payments: any[];
+      loanAdditions?: any[];
       comments: any[];
       category?: string;
       tags?: string[];
@@ -376,6 +382,7 @@ function decryptLoanData(doc: any) {
       doc.set('description', decrypted.description || '', { strict: false });
       doc.set('counterparty', decrypted.counterparty, { strict: false });
       doc.set('payments', decrypted.payments || [], { strict: false });
+      doc.set('loanAdditions', decrypted.loanAdditions || [], { strict: false });
       doc.set('comments', decrypted.comments || [], { strict: false });
       doc.set('category', decrypted.category || '', { strict: false });
       doc.set('tags', decrypted.tags || [], { strict: false });
@@ -388,6 +395,7 @@ function decryptLoanData(doc: any) {
         doc._doc.description = decrypted.description || '';
         doc._doc.counterparty = decrypted.counterparty;
         doc._doc.payments = decrypted.payments || [];
+        doc._doc.loanAdditions = decrypted.loanAdditions || [];
         doc._doc.comments = decrypted.comments || [];
         doc._doc.category = decrypted.category || '';
         doc._doc.tags = decrypted.tags || [];
@@ -425,6 +433,7 @@ LoanSchema.methods.toJSON = function() {
       description?: string;
       counterparty: any;
       payments: any[];
+      loanAdditions?: any[];
       comments: any[];
       category?: string;
       tags?: string[];
@@ -437,6 +446,7 @@ LoanSchema.methods.toJSON = function() {
       loanObject.description = decrypted.description || '';
       loanObject.counterparty = decrypted.counterparty;
       loanObject.payments = decrypted.payments || [];
+      loanObject.loanAdditions = decrypted.loanAdditions || [];
       loanObject.comments = decrypted.comments || [];
       loanObject.category = decrypted.category || '';
       loanObject.tags = decrypted.tags || [];

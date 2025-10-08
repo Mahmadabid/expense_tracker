@@ -23,16 +23,30 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
+    // Decrypt to get counterparty and comments
+    const { decryptObject } = await import('@/lib/utils/encryption');
+    const loanAny = loan as any;
+    let decrypted: any = {};
+    
+    if (loanAny.encryptedData) {
+      try {
+        decrypted = decryptObject(loanAny.encryptedData);
+      } catch (err) {
+        console.error('Failed to decrypt loan data:', err);
+        return serverErrorResponse('Failed to process loan data');
+      }
+    }
+
     // Check access permissions
     const hasAccess = loan.userId === a.uid || 
-                     (loan as any).counterparty?.userId === a.uid ||
-                     (loan as any).collaborators?.some((c: any) => c.userId === a.uid);
+                     decrypted.counterparty?.userId === a.uid ||
+                     loan.collaborators?.some((c: any) => c.userId === a.uid);
     
     if (!hasAccess) {
       return unauthorizedResponse('Access denied');
     }
 
-    const comment = (loan as any).comments?.find((c: any) => c._id.toString() === params.commentId);
+    const comment = decrypted.comments?.find((c: any) => c._id.toString() === params.commentId);
     if (!comment) return notFoundResponse('Comment not found');
 
     return successResponse(comment);
@@ -52,7 +66,21 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
-    const comment = loan.comments?.find(c => c._id.toString() === params.commentId);
+    // Decrypt to get comments
+    const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+    const loanAny = loan as any;
+    let decrypted: any = {};
+    
+    if (loanAny.encryptedData) {
+      try {
+        decrypted = decryptObject(loanAny.encryptedData);
+      } catch (err) {
+        console.error('Failed to decrypt loan data:', err);
+        return serverErrorResponse('Failed to process loan data');
+      }
+    }
+
+    const comment = decrypted.comments?.find((c: any) => c._id.toString() === params.commentId);
     if (!comment) return notFoundResponse('Comment not found');
 
     // Only the person who made the comment can edit it
@@ -72,10 +100,28 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       return errorResponse('Comment message cannot exceed 1000 characters');
     }
 
+    // Update the comment
     comment.message = message.trim();
-    (comment as any).updatedAt = new Date();
+    comment.updatedAt = new Date();
 
+    // Rebuild encrypted data with updated comment
+    const updatedSensitive = {
+      amount: decrypted.amount || 0,
+      originalAmount: decrypted.originalAmount || 0,
+      remainingAmount: decrypted.remainingAmount || 0,
+      description: decrypted.description || '',
+      counterparty: decrypted.counterparty || null,
+      payments: decrypted.payments || [],
+      comments: decrypted.comments || [],
+      category: decrypted.category || '',
+      tags: decrypted.tags || [],
+    };
+
+    const newEncryptedData = encryptObject(updatedSensitive);
+    loanAny.encryptedData = newEncryptedData;
+    
     loan.lastModifiedBy = a.uid;
+    loan.version = (loan.version || 1) + 1;
     await loan.save();
 
     return successResponse(comment, 'Comment updated successfully');
@@ -95,12 +141,26 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
-    const commentIndex = loan.comments?.findIndex(c => c._id.toString() === params.commentId);
+    // Decrypt to get comments
+    const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+    const loanAny = loan as any;
+    let decrypted: any = {};
+    
+    if (loanAny.encryptedData) {
+      try {
+        decrypted = decryptObject(loanAny.encryptedData);
+      } catch (err) {
+        console.error('Failed to decrypt loan data:', err);
+        return serverErrorResponse('Failed to process loan data');
+      }
+    }
+
+    const commentIndex = decrypted.comments?.findIndex((c: any) => c._id.toString() === params.commentId);
     if (commentIndex === undefined || commentIndex === -1) {
       return notFoundResponse('Comment not found');
     }
 
-    const comment = loan.comments[commentIndex];
+    const comment = decrypted.comments[commentIndex];
 
     // Only the person who made the comment or loan owner can delete it
     if (comment.userId !== a.uid && loan.userId !== a.uid) {
@@ -108,8 +168,26 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     // Remove the comment
-    loan.comments.splice(commentIndex, 1);
+    decrypted.comments.splice(commentIndex, 1);
+
+    // Rebuild encrypted data without the deleted comment
+    const updatedSensitive = {
+      amount: decrypted.amount || 0,
+      originalAmount: decrypted.originalAmount || 0,
+      remainingAmount: decrypted.remainingAmount || 0,
+      description: decrypted.description || '',
+      counterparty: decrypted.counterparty || null,
+      payments: decrypted.payments || [],
+      comments: decrypted.comments || [],
+      category: decrypted.category || '',
+      tags: decrypted.tags || [],
+    };
+
+    const newEncryptedData = encryptObject(updatedSensitive);
+    loanAny.encryptedData = newEncryptedData;
+    
     loan.lastModifiedBy = a.uid;
+    loan.version = (loan.version || 1) + 1;
     await loan.save();
 
     return successResponse({ id: params.commentId }, 'Comment deleted successfully');

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const decrypted = decryptObject<any>(anyLoan.encryptedData);
     if (!decrypted) return serverErrorResponse('Failed to decrypt loan data');
 
-    const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, description, comments, category, tags } = decrypted;
+  const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, baseOriginalAmount, loanAdditions = [], description, comments, category, tags } = decrypted;
 
     // Authorization: owner, counterparty, accepted collaborator
     const canAddPayment = loan.userId === a.uid ||
@@ -67,10 +67,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const updatedSensitive = {
       amount: totalAmount,
       originalAmount: originalAmount ?? totalAmount,
+      baseOriginalAmount: baseOriginalAmount || originalAmount || totalAmount,
       remainingAmount: newRemaining,
       description: description || '',
       counterparty: counterparty || null,
       payments: updatedPayments,
+      loanAdditions: loanAdditions,
       comments: comments || [],
       category: category || '',
       tags: tags || [],
@@ -98,7 +100,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return errorResponse('Concurrent modification detected. Please retry.');
     }
 
-    return successResponse(newPayment, 'Payment added successfully', 201);
+  // Fetch updated loan with decryption
+  const refreshed = await LoanModel.findById(loan._id);
+  return successResponse({ payment: newPayment, loan: refreshed }, 'Payment added successfully', 201);
   } catch (error: any) {
     console.error('Payment creation error:', error);
     return serverErrorResponse(error?.message || 'Failed to add payment');

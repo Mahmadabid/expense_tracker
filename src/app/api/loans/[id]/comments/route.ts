@@ -24,16 +24,30 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
+    // Decrypt to get counterparty info for access check
+    const { decryptObject } = await import('@/lib/utils/encryption');
+    const loanAny = loan as any;
+    let decrypted: any = {};
+    
+    if (loanAny.encryptedData) {
+      try {
+        decrypted = decryptObject(loanAny.encryptedData);
+      } catch (err) {
+        console.error('Failed to decrypt loan data:', err);
+        return serverErrorResponse('Failed to process loan data');
+      }
+    }
+
     // Check access permissions
     const hasAccess = loan.userId === a.uid || 
-                     (loan as any).counterparty?.userId === a.uid ||
-                     (loan as any).collaborators?.some((c: any) => c.userId === a.uid);
+                     decrypted.counterparty?.userId === a.uid ||
+                     loan.collaborators?.some((c: any) => c.userId === a.uid);
     
     if (!hasAccess) {
       return unauthorizedResponse('Access denied');
     }
 
-    return successResponse((loan as any).comments || []);
+    return successResponse(decrypted.comments || []);
   } catch (error: any) {
     console.error('Comments fetch error:', error);
     return serverErrorResponse(error?.message || 'Failed to fetch comments');
@@ -75,7 +89,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const user = await UserModel.findOne({ firebaseUid: a.uid });
     const userName = user?.displayName || 'Anonymous User';
 
-    // Add comment
+    // Add comment - need to decrypt, add comment, and re-encrypt
+    const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+    const loanAny = loan as any;
+    let decrypted: any = {};
+    
+    if (loanAny.encryptedData) {
+      try {
+        decrypted = decryptObject(loanAny.encryptedData);
+      } catch (err) {
+        console.error('Failed to decrypt loan data:', err);
+        return serverErrorResponse('Failed to process loan data');
+      }
+    }
+
     const newComment: any = {
       _id: new mongoose.Types.ObjectId(),
       userId: a.uid,
@@ -84,12 +111,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       createdAt: new Date(),
     };
     
-    if (!loan.comments) {
-      loan.comments = [];
-    }
-    loan.comments.push(newComment);
+    // Rebuild encrypted data with new comment
+    const updatedSensitive = {
+      amount: decrypted.amount || 0,
+      originalAmount: decrypted.originalAmount || 0,
+      remainingAmount: decrypted.remainingAmount || 0,
+      description: decrypted.description || '',
+      counterparty: decrypted.counterparty || null,
+      payments: decrypted.payments || [],
+      comments: [...(decrypted.comments || []), newComment],
+      category: decrypted.category || '',
+      tags: decrypted.tags || [],
+    };
+
+    const newEncryptedData = encryptObject(updatedSensitive);
+    loanAny.encryptedData = newEncryptedData;
     
     loan.lastModifiedBy = a.uid;
+    loan.version = (loan.version || 1) + 1;
     await loan.save();
 
     return successResponse(newComment, 'Comment added successfully', 201);

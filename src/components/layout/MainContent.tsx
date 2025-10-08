@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getAuthHeader } from '@/lib/firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { convertCurrency, type Currency } from '@/lib/utils/currencyConversion';
 
 // Constants moved outside component to prevent infinite loop
 const SUPPORTED_CURRENCIES = ['PKR', 'KWD', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'JPY'] as const;
@@ -216,14 +215,22 @@ function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void }) {
 }
 
 // Responsive Loan Card - Payments button on separate line
-function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
+function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpdate: () => void; onOptimisticLoanUpdate?: (updated: any) => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showAddLoanModal, setShowAddLoanModal] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
+  const [showLoanAdditions, setShowLoanAdditions] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [addLoanAmount, setAddLoanAmount] = useState('');
+  const [addLoanDescription, setAddLoanDescription] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [editingAddition, setEditingAddition] = useState<any | null>(null);
+  const [editAdditionAmount, setEditAdditionAmount] = useState('');
+  const [editAdditionDescription, setEditAdditionDescription] = useState('');
+  const [deletingAddition, setDeletingAddition] = useState<string | null>(null);
   
   const loanCurrency = loan.currency || 'PKR';
 
@@ -251,6 +258,9 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
         }),
       });
       if (res.ok) {
+        const json = await res.json();
+        const updatedLoan = json.data?.loan;
+        if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
         setShowPaymentModal(false);
         setPaymentAmount('');
         setPaymentDescription('');
@@ -258,6 +268,117 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
         onUpdate();
       } else {
         alert('Failed to add payment');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error occurred');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openEditAddition = (addition: any) => {
+    setEditingAddition(addition);
+    setEditAdditionAmount(String(addition.amount));
+    setEditAdditionDescription(addition.description || '');
+  };
+
+  const submitEditAddition = async () => {
+    if (!editingAddition) return;
+    const newAmt = parseFloat(editAdditionAmount);
+    if (isNaN(newAmt) || newAmt <= 0) { alert('Enter valid amount'); return; }
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/add-amount/${editingAddition._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ amount: newAmt, description: editAdditionDescription || undefined })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const updatedLoan = json.data;
+        if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+        setEditingAddition(null);
+        onUpdate();
+      } else {
+        alert('Failed to update addition');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error updating addition');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const confirmDeleteAddition = (addition: any) => {
+    setDeletingAddition(addition._id);
+  };
+
+  const executeDeleteAddition = async () => {
+    if (!deletingAddition) return;
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/add-amount/${deletingAddition}`, { method: 'DELETE', headers: authHeaders });
+      if (res.ok) {
+        const json = await res.json();
+        const updatedLoan = json.data;
+        if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+        setDeletingAddition(null);
+        onUpdate();
+      } else {
+        alert('Failed to delete addition');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error deleting addition');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleAddMoreLoan = async () => {
+    const amt = parseFloat(addLoanAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Enter a valid amount');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/add-amount`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          amount: amt,
+          description: addLoanDescription || undefined
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const updatedLoan = json.data;
+        // Optimistic merge fallback if backend unexpectedly omits loanAdditions
+        if (!updatedLoan.loanAdditions) {
+          const newAddition = {
+            _id: 'temp-' + Date.now(),
+            amount: amt,
+            date: new Date().toISOString(),
+            description: addLoanDescription || undefined,
+            addedBy: 'you'
+          };
+          updatedLoan.loanAdditions = [ ...(loan.loanAdditions || []), newAddition ];
+        }
+        if (onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+        setShowAddLoanModal(false);
+        setAddLoanAmount('');
+        setAddLoanDescription('');
+        onUpdate();
+      } else {
+        const errorData = await res.json();
+        alert(errorData.message || 'Failed to add loan amount');
       }
     } catch (err) {
       console.error(err);
@@ -313,12 +434,16 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
     }
   };
 
-  const progress = ((loan.amount - loan.remainingAmount) / loan.amount) * 100;
+  const totalAdded = (loan.loanAdditions || []).reduce((s: number, a: any) => s + (a.amount || 0), 0);
+  const baseOriginal = (loan.baseOriginalAmount || loan.originalAmount || (loan.amount - totalAdded)) || 0;
+  const effectivePrincipal = baseOriginal + totalAdded;
+  const paidSoFar = effectivePrincipal - loan.remainingAmount;
+  const progress = effectivePrincipal > 0 ? (paidSoFar / effectivePrincipal) * 100 : 0;
   const isLent = loan.direction === 'lent';
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 relative">
         {/* Side indicator */}
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLent ? 'bg-blue-500' : 'bg-orange-500'}`} />
 
@@ -382,12 +507,12 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
               </div>
 
               {/* Progress Bar */}
-              {loan.status === 'active' && loan.amount > loan.remainingAmount && (
+              {loan.status === 'active' && effectivePrincipal > 0 && paidSoFar > 0 && (
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
                     <span>{progress.toFixed(0)}% Repaid</span>
                     <span className="tabular-nums text-xs">
-                      {loanCurrency} {(loan.amount - loan.remainingAmount).toFixed(2)} / {loan.amount.toFixed(2)}
+                      {loanCurrency} {paidSoFar.toFixed(2)} / {effectivePrincipal.toFixed(2)}
                     </span>
                   </div>
                   <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -400,7 +525,7 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
               )}
 
               {/* Amount Display - Full Width */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 mb-2">
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 mb-2 space-y-1">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wide">
                   Remaining Amount
                 </p>
@@ -408,24 +533,38 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                   }`}>
                   {loanCurrency} {loan.remainingAmount?.toFixed(2)}
                 </p>
+                {totalAdded > 0 && (
+                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-500">
+                    Added so far: +{loanCurrency} {totalAdded.toFixed(2)} (Original: {loanCurrency} {(loan.amount - totalAdded).toFixed(2)})
+                  </p>
+                )}
               </div>
 
-              {/* Payments Button - Separate Line, Right Aligned */}
-              {loan.payments?.length > 0 && (
-                <div className="flex justify-end">
-                  <button
+              {/* Action Buttons Row - Payments and Loan Additions */}
+              <div className="flex gap-2 justify-end flex-wrap">
+                {loan.payments?.length > 0 && (
+                  <span
                     onClick={() => setShowPayments(!showPayments)}
-                    className="cursor-pointer px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
+                    className="cursor-pointer px-2 py-1.5 text-[11px] sm:text-xs font-medium bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md flex items-center gap-1.5"
                   >
-                    <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                      {loan.payments.length} Payment{loan.payments.length !== 1 ? 's' : ''}
-                    </span>
-                  </button>
-                </div>
-              )}
+                    {loan.payments.length} Payment{loan.payments.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {loan.loanAdditions?.length > 0 && (
+                  <span
+                    onClick={() => setShowLoanAdditions(!showLoanAdditions)}
+                    className="cursor-pointer px-2 py-1.5 text-[11px] sm:text-xs font-medium bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-md flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {loan.loanAdditions.length} Addition{loan.loanAdditions.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -459,13 +598,53 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
               </div>
             </div>
           )}
+
+          {/* Loan Additions List */}
+          {showLoanAdditions && loan.loanAdditions?.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3 space-y-2">
+              <div className="flex flex-col min-[450px]:flex-row min-[450px]:gap-3">
+                {/* Left spacer for alignment on desktop */}
+                <div className="hidden min-[450px]:block min-[450px]:w-12 flex-shrink-0"></div>
+
+                <div className="flex-1 min-w-0 space-y-2">
+                  <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-2">
+                    Additional Loan History
+                  </p>
+                  {loan.loanAdditions.map((addition: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-800 relative">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold text-sm text-purple-900 dark:text-purple-100 tabular-nums">
+                            +{loanCurrency} {addition.amount?.toFixed(2)}
+                          </p>
+                          <span className="text-purple-600 dark:text-purple-400 font-medium text-[10px] whitespace-nowrap">
+                            {new Date(addition.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        {addition.description && (
+                          <p className="text-purple-700 dark:text-purple-300 text-xs mb-0.5">{addition.description}</p>
+                        )}
+                        <p className="text-[10px] text-purple-500 dark:text-purple-400">
+                          Added by {addition.addedByName || addition.addedBy || 'Unknown'}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1 ml-2">
+                        <button onClick={() => openEditAddition(addition)} className="cursor-pointer text-[10px] px-2 py-1 rounded bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 hover:bg-purple-300 dark:hover:bg-purple-700">Edit</button>
+                        <button onClick={() => confirmDeleteAddition(addition)} className="cursor-pointer text-[10px] px-2 py-1 rounded bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 hover:bg-red-300 dark:hover:bg-red-700">Del</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Menu Dropdown */}
         {showMenu && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-            <div className="absolute right-3 top-14 sm:top-16 z-20 min-w-[160px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
+            <div className="absolute right-3 top-14 sm:top-16 z-20 min-w-[160px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl">
               {loan.status === 'active' && (
                 <>
                   <button
@@ -476,6 +655,15 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     Add Payment
+                  </button>
+                  <button
+                    onClick={() => { setShowAddLoanModal(true); setShowMenu(false); }}
+                    className="cursor-pointer w-full px-4 py-3 text-left text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Add More Loan
                   </button>
                   <button
                     onClick={handleCloseLoan}
@@ -506,8 +694,8 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
 
       {/* Payment Modal */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
-          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-2xl sm:rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-2xl sm:rounded-lg shadow-xl max-h-[70vh] sm:max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Add Payment</h4>
               <button
@@ -520,7 +708,7 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
               </button>
             </div>
 
-            <div className="p-5 space-y-5 pb-8">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-5 pb-6 sm:pb-8">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Payment Amount
@@ -534,7 +722,7 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   onWheel={(e) => e.currentTarget.blur()}
-                  className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-lg sm:text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   placeholder="0.00"
                   autoFocus
                 />
@@ -548,7 +736,7 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                   type="text"
                   value={paymentDescription}
                   onChange={(e) => setPaymentDescription(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   placeholder="e.g., Partial payment"
                 />
               </div>
@@ -561,11 +749,11 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="cursor-pointer w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 sm:gap-3 pt-2">
                 <Button
                   type="button"
                   variant="secondary"
@@ -585,6 +773,125 @@ function LoanCard({ loan, onUpdate }: { loan: any; onUpdate: () => void }) {
                 >
                   Add Payment
                 </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add More Loan Modal */}
+      {showAddLoanModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-2xl sm:rounded-lg shadow-xl max-h-[70vh] sm:max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Add More Loan</h4>
+              <button
+                onClick={() => setShowAddLoanModal(false)}
+                className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-5 pb-6 sm:pb-8">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Additional Loan Amount
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  This will be added to the remaining balance
+                </p>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={addLoanAmount}
+                  onChange={(e) => setAddLoanAmount(e.target.value)}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-lg sm:text-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={addLoanDescription}
+                  onChange={(e) => setAddLoanDescription(e.target.value)}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                  placeholder="e.g., Additional loan for expenses"
+                />
+              </div>
+
+              <div className="flex gap-2 sm:gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowAddLoanModal(false)}
+                  fullWidth
+                  size="md"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleAddMoreLoan}
+                  loading={processing}
+                  fullWidth
+                  size="md"
+                >
+                  Add Loan
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Addition Modal */}
+      {editingAddition && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-2xl sm:rounded-lg shadow-xl max-h-[70vh] sm:max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Addition</h4>
+              <button onClick={() => setEditingAddition(null)} className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-4 sm:p-5 space-y-4 pb-8">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount</label>
+                <input type="number" step="0.01" value={editAdditionAmount} onChange={e => setEditAdditionAmount(e.target.value)} className="w-full px-3 sm:px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-semibold text-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description (Optional)</label>
+                <input type="text" value={editAdditionDescription} onChange={e => setEditAdditionDescription(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="secondary" fullWidth onClick={() => setEditingAddition(null)}>Cancel</Button>
+                <Button variant="primary" fullWidth loading={processing} onClick={submitEditAddition}>Save</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Addition Confirmation */}
+      {deletingAddition && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-t-2xl sm:rounded-lg shadow-xl">
+            <div className="p-5 space-y-4">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Addition?</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400">This will remove the added amount and adjust the remaining balance. Action is irreversible.</p>
+              <div className="flex gap-2 pt-2">
+                <Button variant="secondary" fullWidth onClick={() => setDeletingAddition(null)}>Cancel</Button>
+                <Button variant="danger" fullWidth loading={processing} onClick={executeDeleteAddition}>Delete</Button>
               </div>
             </div>
           </div>
@@ -638,6 +945,8 @@ export function MainContent() {
   const [modalType, setModalType] = useState<null | 'transaction' | 'loan'>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  // Maintain a local loans array for optimistic updates (loan additions & payments)
+  const [loansState, setLoansState] = useState<any[] | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -651,8 +960,6 @@ export function MainContent() {
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PKR');
-  const [previousCurrency, setPreviousCurrency] = useState('PKR');
-  const [isConverting, setIsConverting] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'income' | 'expense' | 'loans'>('all');
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -666,33 +973,6 @@ export function MainContent() {
     setFormData({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
     setErrorMessage(null);
     setTransactionType('expense');
-    setPreviousCurrency(currency);
-  };
-
-  // Handle currency change with automatic conversion
-  const handleCurrencyChange = async (newCurrency: string) => {
-    const currentAmount = parseFloat(formData.amount);
-    
-    // If there's a valid amount, convert it
-    if (!isNaN(currentAmount) && currentAmount > 0 && previousCurrency !== newCurrency) {
-      setIsConverting(true);
-      try {
-        const convertedAmount = await convertCurrency(
-          currentAmount,
-          previousCurrency as Currency,
-          newCurrency as Currency
-        );
-        setFormData({ ...formData, amount: convertedAmount.toFixed(2) });
-      } catch (error) {
-        console.error('Currency conversion failed:', error);
-        // Don't convert if API fails, just change currency
-      } finally {
-        setIsConverting(false);
-      }
-    }
-    
-    setCurrency(newCurrency);
-    setPreviousCurrency(newCurrency);
   };
 
   useEffect(() => {
@@ -707,9 +987,7 @@ export function MainContent() {
 
     if (stored && SUPPORTED_CURRENCIES.includes(stored as SupportedCurrency)) {
       setCurrency(stored as SupportedCurrency);
-      setPreviousCurrency(stored as SupportedCurrency);
     }
-    
   }, []); // Empty dependency - only run once on mount
 
   useEffect(() => {
@@ -758,11 +1036,14 @@ export function MainContent() {
     setDataLoading(true);
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch('/api/dashboard', { headers: authHeaders });
+      const res = await fetch('/api/dashboard', { headers: authHeaders, cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const normalizedData = normalizeCurrencies(data.data);
         setDashboardData(normalizedData);
+        if (Array.isArray(normalizedData.loans)) {
+          setLoansState(normalizedData.loans);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
@@ -775,7 +1056,7 @@ export function MainContent() {
   const calculateLoanAmounts = () => {
     if (!dashboardData) return { totalLoaned: 0, totalBorrowed: 0 };
 
-    const rawLoansCandidate: any = (dashboardData as any).loans;
+  const rawLoansCandidate: any = loansState || (dashboardData as any).loans;
     const rawLoans = Array.isArray(rawLoansCandidate)
       ? rawLoansCandidate
       : (rawLoansCandidate && Array.isArray(rawLoansCandidate.data))
@@ -801,7 +1082,7 @@ export function MainContent() {
     if (!dashboardData) return [];
 
     const rawEntriesCandidate: any = (dashboardData as any).entries;
-    const rawLoansCandidate: any = (dashboardData as any).loans;
+  const rawLoansCandidate: any = loansState || (dashboardData as any).loans;
     const rawEntries = Array.isArray(rawEntriesCandidate)
       ? rawEntriesCandidate
       : (rawEntriesCandidate && Array.isArray(rawEntriesCandidate.data))
@@ -813,7 +1094,7 @@ export function MainContent() {
         ? rawLoansCandidate.data
         : (dashboardData.recentLoans || []);
     const entries = Array.isArray(rawEntries) ? rawEntries.map((e: any) => ({ ...e, isLoan: false })) : [];
-    const loans = Array.isArray(rawLoans) ? rawLoans.map((l: any) => ({ ...l, isLoan: true })) : [];
+  const loans = Array.isArray(rawLoans) ? rawLoans.map((l: any) => ({ ...l, isLoan: true })) : [];
     let combined = [...entries, ...loans];
 
     if (activeTab === 'loans') {
@@ -1237,7 +1518,7 @@ export function MainContent() {
         </div>
 
         {/* Activity Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
           {/* Enhanced Tabs */}
           <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <div className="flex">
@@ -1266,7 +1547,17 @@ export function MainContent() {
               <div className="space-y-3 sm:space-y-4">
                 {getFilteredActivity().map((item: any) => (
                   item.isLoan ? (
-                    <LoanCard key={item._id} loan={item} onUpdate={fetchDashboardData} />
+                    <LoanCard
+                      key={item._id}
+                      loan={item}
+                      onUpdate={fetchDashboardData}
+                      onOptimisticLoanUpdate={(u) => {
+                        setLoansState(prev => {
+                          if (!prev) return [u];
+                          return prev.map(l => l._id === u._id ? { ...l, ...u } : l);
+                        });
+                      }}
+                    />
                   ) : (
                     <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} />
                   )
@@ -1306,7 +1597,7 @@ export function MainContent() {
       </div>
 
       {/* Enhanced FAB - Mobile */}
-      <div className="sm:hidden fixed bottom-5 sm:bottom-6 right-5 sm:right-6 z-50">
+      <div className="sm:hidden fixed bottom-5 sm:bottom-6 right-5 sm:right-6 z-40">
         {showQuickActions && (
           <>
             <div className="absolute bottom-16 sm:bottom-20 right-0 space-y-2 sm:space-y-3 mb-2">
@@ -1346,8 +1637,8 @@ export function MainContent() {
 
       {/* Enhanced Modal */}
       {modalType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-lg shadow-xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 {modalType === 'loan' ? 'Add Loan' : 'Add Transaction'}
@@ -1363,7 +1654,7 @@ export function MainContent() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-5">
               {errorMessage && (
                 <div className="flex items-start gap-2 sm:gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -1424,21 +1715,17 @@ export function MainContent() {
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 uppercase tracking-wide">
-                    Currency {isConverting && <span className="text-xs text-blue-600 dark:text-blue-400">(Converting...)</span>}
+                    Currency
                   </label>
                   <select
                     value={currency}
-                    onChange={(e) => handleCurrencyChange(e.target.value)}
-                    disabled={isConverting}
-                    className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-medium text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all disabled:opacity-50"
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="cursor-pointer w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white font-medium text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   >
                     {SUPPORTED_CURRENCIES.map(curr => (
                       <option key={curr} value={curr}>{curr}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Amount will auto-convert when you change currency
-                  </p>
                 </div>
               </div>
 
