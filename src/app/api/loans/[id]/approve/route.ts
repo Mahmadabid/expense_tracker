@@ -7,7 +7,7 @@ import { successResponse, unauthorizedResponse, serverErrorResponse, errorRespon
 // POST /api/loans/[id]/approve - Accept a loan request
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -19,10 +19,12 @@ export async function POST(
 
     const userId = decoded.uid;
     await connectDB();
+    
+    const { id } = await params;
 
     // Optimized: Query with counterparty filter directly to avoid unauthorized access
     const loan = await LoanModel.findOne({ 
-      _id: params.id, 
+      _id: id, 
       counterpartyUserId: userId 
     }).select('userId counterpartyUserId loanStatus collaborators version lastModifiedBy');
     

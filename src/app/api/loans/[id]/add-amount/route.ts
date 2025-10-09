@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
-import { LoanModel, UserModel } from '@/lib/models';
+import { LoanModel, UserModel, NotificationModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
 
 async function auth(request: NextRequest) {
@@ -40,6 +40,52 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return errorResponse('Amount must be positive');
     }
 
+    // Resolve user display name
+    let userName: string | undefined = undefined;
+    try {
+      const userDoc = await UserModel.findOne({ firebaseUid: a.uid });
+      userName = userDoc?.displayName || 'User';
+    } catch {}
+
+    // Check if this is a collaborative loan and user is not the owner
+    const isOwner = loan.userId === a.uid;
+    const requiresCollaboration = loan.requiresCollaboration;
+
+    if (requiresCollaboration && !isOwner) {
+      // Create pending change instead of adding directly
+      const mongoose = await import('mongoose');
+      const pendingChange = {
+        _id: new mongoose.default.Types.ObjectId(),
+        type: 'loan_addition',
+        action: 'add',
+        data: { amount, description },
+        requestedBy: a.uid,
+        requestedByName: userName || 'User',
+        status: 'pending',
+        createdAt: new Date()
+      };
+
+      loan.pendingChanges.push(pendingChange as any);
+      await loan.save();
+
+      // Notify the owner
+      try {
+        await NotificationModel.create({
+          userId: loan.userId,
+          title: 'Loan Addition Pending Approval',
+          message: `${userName || 'Someone'} wants to add ${loan.currency || 'PKR'} ${amount.toFixed(2)} to the loan${description ? ' - ' + description : ''}`,
+          type: 'loan_update',
+          relatedLoan: loan._id,
+          relatedUser: a.uid,
+          createdAt: new Date()
+        });
+      } catch (err) {
+        console.error('Failed to send notification:', err);
+      }
+
+      return successResponse(pendingChange, 'Loan addition submitted for approval', 201);
+    }
+
     // Get current decrypted data
     const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
     let decrypted: any = {};
@@ -71,12 +117,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // Create a loan addition entry (similar to payment structure)
     const mongoose = await import('mongoose');
-    // Resolve user display name for audit
-    let addedByName: string | undefined = undefined;
-    try {
-      const userDoc = await UserModel.findOne({ firebaseUid: a.uid });
-      addedByName = userDoc?.displayName || 'User';
-    } catch {}
 
     const loanAddition = {
       _id: new mongoose.default.Types.ObjectId(),
@@ -84,7 +124,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       date: new Date(),
       description: description || undefined,
       addedBy: a.uid,
-      addedByName,
+      addedByName: userName,
       version: 1,
       createdAt: new Date(),
     };
@@ -93,7 +133,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const addLoanComment = {
       _id: new mongoose.default.Types.ObjectId(),
       userId: a.uid,
-      userName: addedByName || 'System',
+      userName: userName || 'System',
       message: `Added +${loan.currency || 'PKR'} ${amount.toFixed(2)}${description ? ' (' + description + ')' : ''}`,
       createdAt: new Date(),
     };

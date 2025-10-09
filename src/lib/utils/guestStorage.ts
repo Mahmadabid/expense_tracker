@@ -160,6 +160,7 @@ export function addGuestLoan(loan: Omit<Loan, '_id' | 'createdAt' | 'updatedAt' 
     }],
     loanStatus: 'accepted', // Guest loans don't need approval
     requiresMutualApproval: false,
+    requiresCollaboration: false, // Guest loans are always personal tracking
     createdAt: new Date(),
     updatedAt: new Date(),
   };

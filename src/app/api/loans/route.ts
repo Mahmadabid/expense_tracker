@@ -20,12 +20,14 @@ export async function GET(request: NextRequest) {
     const direction = searchParams.get('direction');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
 
+    // Only show loans where user is owner, or where user is counterparty/collaborator AND requiresCollaboration is true
     const base: any = { 
       $or: [ 
-        { userId: decoded.uid }, 
-        { 'collaborators.userId': decoded.uid },
-        { counterpartyUserId: decoded.uid }  // Allow counterparty to see their loans
-      ] 
+        { userId: decoded.uid }, // User is the owner - show all their loans
+        { 'collaborators.userId': decoded.uid, requiresCollaboration: true }, // User is collaborator and collaboration enabled
+        { counterpartyUserId: decoded.uid, requiresCollaboration: true } // User is counterparty and collaboration enabled
+      ],
+      loanStatus: { $ne: 'rejected' } // Exclude rejected loans by default
     };
     if (status) base.status = status;
     if (direction) base.direction = direction;
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     // Optimized: Select only necessary fields, exclude full collaborators array
     // Use projection to fetch only user's relevant collaborator data
     const loans = await LoanModel.find(base)
-      .select('amount remainingAmount description direction status date dueDate currency counterpartyUserId loanStatus createdBy lastModifiedBy version tags')
+      .select('amount remainingAmount description direction status date dueDate currency counterpartyUserId loanStatus requiresCollaboration createdBy lastModifiedBy version tags')
       .sort({ date: -1 })
       .limit(limit)
       .lean();
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (!decoded) return unauthorizedResponse('Invalid token');
 
     const body = await request.json();
-    const { amount, currency, description, direction, counterparty, dueDate, tags, isPersonal } = body;
+    const { amount, currency, description, direction, counterparty, dueDate, tags, isPersonal, requiresCollaboration } = body;
 
     // Basic validation
     if (!amount || amount <= 0) return errorResponse('Amount must be positive');
@@ -65,8 +67,15 @@ export async function POST(request: NextRequest) {
     
     // For collaborative loans, counterparty is required; for personal loans, it's optional
     const isPersonalLoan = isPersonal === true;
+    const needsCollaboration = requiresCollaboration === true;
+    
     if (!isPersonalLoan && (!counterparty || !counterparty.name)) {
-      return errorResponse('Counterparty name is required for collaborative loans');
+      return errorResponse('Counterparty name is required for non-personal loans');
+    }
+    
+    // Personal loans can't be collaborative
+    if (isPersonalLoan && needsCollaboration) {
+      return errorResponse('Personal loans cannot require collaboration');
     }
 
     await connectDB();
@@ -127,8 +136,10 @@ export async function POST(request: NextRequest) {
       date: new Date(),
       status: 'active',
       isPersonal: isPersonalLoan,
-      // Personal loans are auto-accepted; collaborative loans need approval if counterparty is registered
-      loanStatus: isPersonalLoan ? 'accepted' : (counterpartyUserId ? 'pending' : 'accepted'),
+      requiresCollaboration: needsCollaboration,
+      // Personal loans and non-collaborative loans are auto-accepted
+      // Only collaborative loans with registered counterparty need approval
+      loanStatus: isPersonalLoan || !needsCollaboration ? 'accepted' : (counterpartyUserId ? 'pending' : 'accepted'),
       // store empty arrays for tags at schema level (tags inside encrypted)
       tags: [],
       version: 1,
@@ -139,7 +150,7 @@ export async function POST(request: NextRequest) {
       collaborators: [],
       pendingApprovals: [],
       auditTrail: [],
-      requiresMutualApproval: isPersonalLoan ? false : true, // Personal loans don't need mutual approval
+      requiresMutualApproval: isPersonalLoan || !needsCollaboration ? false : true, // Only collaborative loans need mutual approval
       ...(body.category ? { category: undefined } : {}),
       ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
     });
@@ -156,18 +167,19 @@ export async function POST(request: NextRequest) {
 
     await loan.save();
 
-    console.log('[LOAN API] Loan created successfully, isPersonal:', isPersonalLoan, 'has encryptedData:', !!(loan as any).encryptedData);
+    console.log('[LOAN API] Loan created successfully, isPersonal:', isPersonalLoan, 'requiresCollaboration:', needsCollaboration, 'has encryptedData:', !!(loan as any).encryptedData);
 
     // Only send notification for collaborative loans with registered counterparty
-    if (!isPersonalLoan && counterpartyUserId) {
+    // Non-collaborative loans are just tracked by one person, no notification needed
+    if (!isPersonalLoan && needsCollaboration && counterpartyUserId) {
       const notificationMessage = direction === 'lent'
-        ? `${creatorName} has recorded lending you ${currency} ${amount}`
-        : `${creatorName} has recorded borrowing ${currency} ${amount} from you`;
+        ? `${creatorName} wants to collaborate on a loan - lending you ${currency} ${amount}`
+        : `${creatorName} wants to collaborate on a loan - borrowing ${currency} ${amount} from you`;
 
       await NotificationModel.create({
         userId: counterpartyUserId,
         type: 'loan_request',
-        title: 'New Loan Request',
+        title: 'Loan Collaboration Request',
         message: notificationMessage,
         relatedId: String(loan._id),
         relatedModel: 'Loan',
@@ -180,10 +192,11 @@ export async function POST(request: NextRequest) {
           amount,
           currency,
           direction: direction === 'lent' ? 'borrowed' : 'lent', // Flip for counterparty perspective
+          requiresCollaboration: true,
         },
       });
 
-      console.log('[LOAN API] Notification sent to counterparty:', counterpartyUserId);
+      console.log('[LOAN API] Collaboration notification sent to counterparty:', counterpartyUserId);
     }
 
     return successResponse(loan, 'Loan created successfully', 201);

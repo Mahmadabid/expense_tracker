@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase/admin';
 import { connectDB } from '@/lib/db/mongodb';
-import { LoanModel, UserModel } from '@/lib/models';
+import { LoanModel, UserModel, NotificationModel } from '@/lib/models';
 import { successResponse, unauthorizedResponse, serverErrorResponse, notFoundResponse, errorResponse } from '@/lib/utils/apiResponse';
 import mongoose from 'mongoose';
 
@@ -12,12 +12,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const params = await context.params;
     await connectDB();
     // Optimized: Only fetch collaborator matching the authenticated user
+    // Only allow access if user is owner, or if requiresCollaboration is true and user is counterparty/collaborator
     const loan = await LoanModel.findOne({
       _id: params.id,
       $or: [
-        { userId: a.uid },
-        { counterpartyUserId: a.uid },
-        { 'collaborators': { $elemMatch: { userId: a.uid, status: 'accepted' } } }
+        { userId: a.uid }, // User is owner - can always access
+        { counterpartyUserId: a.uid, requiresCollaboration: true }, // User is counterparty and collaboration enabled
+        { 'collaborators': { $elemMatch: { userId: a.uid, status: 'accepted' } }, requiresCollaboration: true }
       ]
     });
     if (!loan) return notFoundResponse('Loan not found or access denied');
@@ -30,14 +31,62 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const isOwner = loan.userId === a.uid;
     const isCounterparty = (loan as any).counterparty?.userId === a.uid;
     const collaborator = loan.collaborators?.find(c => c.userId === a.uid && c.status === 'accepted');
+    const requiresCollaboration = (loan as any).requiresCollaboration === true;
 
     if (action === 'addPayment') {
-      const canAddPayment = isOwner || isCounterparty || !!collaborator;
+      // Only owner can add payments for non-collaborative loans
+      // For collaborative loans, counterparty and collaborators can also add payments
+      const canAddPayment = isOwner || (requiresCollaboration && (isCounterparty || !!collaborator));
       if (!canAddPayment) return unauthorizedResponse('Not authorized to add payments');
       const { amount, date, method, notes } = body;
       if (!amount || amount <= 0) return errorResponse('Payment amount must be positive');
       if (amount > (loan as any).remainingAmount) return errorResponse('Amount exceeds remaining balance');
 
+      // Get user name for pending change
+      const user = await UserModel.findOne({ firebaseUid: a.uid }).select('displayName').lean();
+      const userName = user?.displayName || 'User';
+
+      // For collaborative loans, create pending change if not the owner
+      if (requiresCollaboration && !isOwner) {
+        const pendingChange: any = {
+          _id: new mongoose.Types.ObjectId(),
+          type: 'payment',
+          action: 'add',
+          data: {
+            amount,
+            date: date ? new Date(date) : new Date(),
+            method: method || undefined,
+            notes: notes || undefined,
+            paidBy: a.uid,
+            version: 1,
+          },
+          requestedBy: a.uid,
+          requestedByName: userName,
+          status: 'pending',
+          createdAt: new Date(),
+        };
+
+        if (!(loan as any).pendingChanges) (loan as any).pendingChanges = [];
+        (loan as any).pendingChanges.push(pendingChange);
+        loan.lastModifiedBy = a.uid;
+        await loan.save();
+
+        // Notify the owner about pending change
+        await NotificationModel.create({
+          userId: loan.userId,
+          type: 'approval_request',
+          title: 'Payment Approval Needed',
+          message: `${userName} wants to add a payment of ${amount} to the loan`,
+          relatedId: String(loan._id),
+          relatedModel: 'Loan',
+          actionUrl: `/loans/${String(loan._id)}`,
+          priority: 'high',
+        });
+
+        return successResponse(pendingChange, 'Payment submitted for approval', 201);
+      }
+
+      // Owner can add directly
       const newPayment: any = {
         _id: new mongoose.Types.ObjectId(),
         amount,
@@ -59,7 +108,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     if (action === 'addComment') {
-      const canComment = isOwner || isCounterparty || !!collaborator;
+      // Only owner can comment on non-collaborative loans
+      // For collaborative loans, counterparty and collaborators can also comment
+      const canComment = isOwner || (requiresCollaboration && (isCounterparty || !!collaborator));
       if (!canComment) return unauthorizedResponse('Not authorized to comment');
       const { message } = body;
       if (!message || message.trim().length === 0) return errorResponse('Comment message required');
@@ -104,12 +155,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     await connectDB();
     
     // Optimized: Query with access filter built-in, no post-query filtering needed
+    // Only allow access if user is owner, or if requiresCollaboration is true and user is counterparty/collaborator
     const loan = await LoanModel.findOne({
       _id: params.id,
       $or: [
-        { userId: a.uid },
-        { counterpartyUserId: a.uid },
-        { 'collaborators.userId': a.uid }
+        { userId: a.uid }, // User is owner - can always access
+        { counterpartyUserId: a.uid, requiresCollaboration: true }, // User is counterparty and collaboration enabled
+        { 'collaborators.userId': a.uid, requiresCollaboration: true } // User is collaborator and collaboration enabled
       ]
     });
     

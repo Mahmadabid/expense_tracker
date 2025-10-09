@@ -39,11 +39,18 @@ export async function GET(request: NextRequest) {
         .lean(),
       // Fetch loans - need to decrypt so don't use .lean()
       // Can't use aggregation because remainingAmount is encrypted
+      // Only show loans where user is owner, or where user is counterparty/collaborator AND requiresCollaboration is true
+      // Exclude rejected loans from the dashboard
       LoanModel.find({ 
-        $or: [{ userId }, { 'collaborators.userId': userId }], 
-        status: 'active' 
+        $or: [
+          { userId }, // User is the owner - show all their loans
+          { 'collaborators.userId': userId, requiresCollaboration: true }, // User is collaborator and collaboration enabled
+          { counterpartyUserId: userId, requiresCollaboration: true } // User is counterparty and collaboration enabled
+        ], 
+        status: 'active',
+        loanStatus: { $ne: 'rejected' } // Exclude rejected loans
       })
-        .select('encryptedData currency date counterpartyUserId loanStatus direction status isPersonal dueDate version createdBy lastModifiedBy')
+        .select('encryptedData currency date counterpartyUserId loanStatus direction status isPersonal requiresCollaboration dueDate version createdBy lastModifiedBy')
         .sort({ date: -1 }),
     ]);
 

@@ -6,6 +6,7 @@ import { getAuthHeader } from '@/lib/firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import PendingLoanCard from '@/components/ui/PendingLoanCard';
 import AuditTrailViewer from '@/components/ui/AuditTrailViewer';
+import { useToast } from '@/components/ui/Toaster';
 import * as guestStorage from '@/lib/utils/guestStorage';
 
 // Constants moved outside component to prevent infinite loop
@@ -107,7 +108,7 @@ function Button({
 }
 
 // Compact Entry Card
-function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void }) {
+function EntryCard({ entry, onUpdate, addToast }: { entry: any; onUpdate: () => void; addToast: any }) {
   const [showMenu, setShowMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -123,11 +124,11 @@ function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void }) {
       if (res.ok) {
         onUpdate();
       } else {
-        alert('Failed to delete');
+        addToast({ type: 'error', title: 'Failed to delete', description: 'Could not delete the transaction. Please try again.' });
       }
     } catch (err) {
       console.error(err);
-      alert('Error occurred');
+      addToast({ type: 'error', title: 'Error occurred', description: 'An unexpected error occurred while deleting.' });
     } finally {
       setDeleting(false);
     }
@@ -218,7 +219,7 @@ function EntryCard({ entry, onUpdate }: { entry: any; onUpdate: () => void }) {
 }
 
 // Responsive Loan Card - Payments button on separate line
-function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpdate: () => void; onOptimisticLoanUpdate?: (updated: any) => void }) {
+function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate, currentUserId, addToast }: { loan: any; onUpdate: () => void; onOptimisticLoanUpdate?: (updated: any) => void; currentUserId: string; addToast: any }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAddLoanModal, setShowAddLoanModal] = useState(false);
@@ -235,27 +236,78 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
   const [editAdditionAmount, setEditAdditionAmount] = useState('');
   const [editAdditionDescription, setEditAdditionDescription] = useState('');
   const [deletingAddition, setDeletingAddition] = useState<string | null>(null);
+  const [approvingChange, setApprovingChange] = useState<string | null>(null);
+  const [rejectingChange, setRejectingChange] = useState<string | null>(null);
   
   const loanCurrency = loan.currency || 'PKR';
+
+  const handleApprovePendingChange = async (changeId: string) => {
+    setApprovingChange(changeId);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/pending-changes/${changeId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+      });
+      
+      if (res.ok) {
+        addToast({ type: 'success', title: 'Change Approved', description: 'The pending change has been approved.' });
+        onUpdate();
+      } else {
+        const error = await res.json();
+        addToast({ type: 'error', title: 'Approval Failed', description: error.message || 'Failed to approve change' });
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred while approving the change.' });
+    } finally {
+      setApprovingChange(null);
+    }
+  };
+
+  const handleRejectPendingChange = async (changeId: string) => {
+    setRejectingChange(changeId);
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`/api/loans/${loan._id}/pending-changes/${changeId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+      });
+      
+      if (res.ok) {
+        addToast({ type: 'success', title: 'Change Rejected', description: 'The pending change has been rejected.' });
+        onUpdate();
+      } else {
+        const error = await res.json();
+        addToast({ type: 'error', title: 'Rejection Failed', description: error.message || 'Failed to reject change' });
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred while rejecting the change.' });
+    } finally {
+      setRejectingChange(null);
+    }
+  };
 
   const handleAddPayment = async () => {
     const amt = parseFloat(paymentAmount);
     if (isNaN(amt) || amt <= 0) {
-      alert('Enter a valid amount');
+      addToast({ type: 'error', title: 'Invalid Amount', description: 'Please enter a valid amount' });
       return;
     }
     if (amt > loan.remainingAmount) {
-      alert('Amount exceeds remaining balance');
+      addToast({ type: 'error', title: 'Invalid Amount', description: 'Amount exceeds remaining balance' });
       return;
     }
 
     setProcessing(true);
     try {
       const authHeaders = await getAuthHeader();
-      const res = await fetch(`/api/loans/${loan._id}/payments`, {
+      const res = await fetch(`/api/loans/${loan._id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
+          action: 'addPayment',
           amount: amt,
           date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
           description: paymentDescription || undefined
@@ -263,6 +315,14 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
       });
       if (res.ok) {
         const json = await res.json();
+        const isSubmittedForApproval = json.message?.includes('approval');
+        
+        if (isSubmittedForApproval) {
+          addToast({ type: 'info', title: 'Payment Submitted', description: 'Your payment has been submitted for approval.' });
+        } else {
+          addToast({ type: 'success', title: 'Payment Added', description: 'Payment has been added successfully.' });
+        }
+        
         const updatedLoan = json.data?.loan;
         if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
         setShowPaymentModal(false);
@@ -271,11 +331,11 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
         setPaymentDate(new Date().toISOString().split('T')[0]);
         onUpdate();
       } else {
-        alert('Failed to add payment');
+        addToast({ type: 'error', title: 'Failed', description: 'Failed to add payment' });
       }
     } catch (err) {
       console.error(err);
-      alert('Error occurred');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred' });
     } finally {
       setProcessing(false);
     }
@@ -290,7 +350,10 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
   const submitEditAddition = async () => {
     if (!editingAddition) return;
     const newAmt = parseFloat(editAdditionAmount);
-    if (isNaN(newAmt) || newAmt <= 0) { alert('Enter valid amount'); return; }
+    if (isNaN(newAmt) || newAmt <= 0) { 
+      addToast({ type: 'error', title: 'Invalid Amount', description: 'Please enter a valid amount' });
+      return; 
+    }
     setProcessing(true);
     try {
       const authHeaders = await getAuthHeader();
@@ -304,13 +367,14 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
         const updatedLoan = json.data;
         if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
         setEditingAddition(null);
+        addToast({ type: 'success', title: 'Updated', description: 'Addition updated successfully' });
         onUpdate();
       } else {
-        alert('Failed to update addition');
+        addToast({ type: 'error', title: 'Failed', description: 'Failed to update addition' });
       }
     } catch (e) {
       console.error(e);
-      alert('Error updating addition');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred while updating' });
     } finally {
       setProcessing(false);
     }
@@ -326,18 +390,25 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
     try {
       const authHeaders = await getAuthHeader();
       const res = await fetch(`/api/loans/${loan._id}/add-amount/${deletingAddition}`, { method: 'DELETE', headers: authHeaders });
+      const json = await res.json();
+      // If backend returned a pending change (201) or message indicates approval flow, show submitted toast
+      const isSubmittedForApproval = res.status === 201 || json.message?.toLowerCase()?.includes('approval') || json.data?.type === 'addition_deletion';
       if (res.ok) {
-        const json = await res.json();
         const updatedLoan = json.data;
-        if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+        if (!isSubmittedForApproval) {
+          if (updatedLoan && onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+          addToast({ type: 'success', title: 'Deleted', description: 'Addition deleted successfully' });
+        } else {
+          addToast({ type: 'info', title: 'Deletion Submitted', description: 'Addition deletion has been submitted for approval.' });
+        }
         setDeletingAddition(null);
         onUpdate();
       } else {
-        alert('Failed to delete addition');
+        addToast({ type: 'error', title: 'Failed', description: json.message || 'Failed to delete addition' });
       }
     } catch (e) {
       console.error(e);
-      alert('Error deleting addition');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred while deleting' });
     } finally {
       setProcessing(false);
     }
@@ -346,7 +417,7 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
   const handleAddMoreLoan = async () => {
     const amt = parseFloat(addLoanAmount);
     if (isNaN(amt) || amt <= 0) {
-      alert('Enter a valid amount');
+      addToast({ type: 'error', title: 'Invalid Amount', description: 'Please enter a valid amount' });
       return;
     }
 
@@ -363,9 +434,17 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
       });
       if (res.ok) {
         const json = await res.json();
+        const isSubmittedForApproval = json.message?.includes('approval');
+        
+        if (isSubmittedForApproval) {
+          addToast({ type: 'info', title: 'Addition Submitted', description: 'Your loan addition has been submitted for approval.' });
+        } else {
+          addToast({ type: 'success', title: 'Loan Added', description: 'Loan amount has been added successfully.' });
+        }
+        
         const updatedLoan = json.data;
         // Optimistic merge fallback if backend unexpectedly omits loanAdditions
-        if (!updatedLoan.loanAdditions) {
+        if (!updatedLoan.loanAdditions && !isSubmittedForApproval) {
           const newAddition = {
             _id: 'temp-' + Date.now(),
             amount: amt,
@@ -375,18 +454,18 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
           };
           updatedLoan.loanAdditions = [ ...(loan.loanAdditions || []), newAddition ];
         }
-        if (onOptimisticLoanUpdate) onOptimisticLoanUpdate(updatedLoan);
+        if (onOptimisticLoanUpdate && !isSubmittedForApproval) onOptimisticLoanUpdate(updatedLoan);
         setShowAddLoanModal(false);
         setAddLoanAmount('');
         setAddLoanDescription('');
         onUpdate();
       } else {
         const errorData = await res.json();
-        alert(errorData.message || 'Failed to add loan amount');
+        addToast({ type: 'error', title: 'Failed', description: errorData.message || 'Failed to add loan amount' });
       }
     } catch (err) {
       console.error(err);
-      alert('Error occurred');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred' });
     } finally {
       setProcessing(false);
     }
@@ -404,13 +483,14 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
       });
       if (res.ok) {
         setShowMenu(false);
+        addToast({ type: 'success', title: 'Updated', description: 'Loan marked as fully paid' });
         onUpdate();
       } else {
-        alert('Failed to update');
+        addToast({ type: 'error', title: 'Failed', description: 'Failed to update loan status' });
       }
     } catch (err) {
       console.error(err);
-      alert('Error occurred');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred' });
     } finally {
       setProcessing(false);
     }
@@ -426,13 +506,14 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
         headers: authHeaders,
       });
       if (res.ok) {
+        addToast({ type: 'success', title: 'Deleted', description: 'Loan deleted successfully' });
         onUpdate();
       } else {
-        alert('Failed to delete');
+        addToast({ type: 'error', title: 'Failed', description: 'Failed to delete loan' });
       }
     } catch (err) {
       console.error(err);
-      alert('Error occurred');
+      addToast({ type: 'error', title: 'Error', description: 'An error occurred' });
     } finally {
       setProcessing(false);
     }
@@ -525,6 +606,72 @@ function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate }: { loan: any; onUpd
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Pending Changes */}
+              {loan.pendingChanges && loan.pendingChanges.length > 0 && loan.pendingChanges.some((c: any) => c.status === 'pending') && (
+                <div className="mb-3 space-y-2">
+                  {loan.pendingChanges
+                    .filter((change: any) => change.status === 'pending')
+                    .map((change: any) => {
+                      const isOwnChange = change.requestedBy === currentUserId;
+                      const changeTypeLabelMap: Record<string, string> = {
+                        payment: 'Payment',
+                        loan_addition: 'Loan Addition',
+                        payment_deletion: 'Payment Deletion',
+                        addition_deletion: 'Addition Deletion',
+                        loan_deletion: 'Loan Deletion'
+                      };
+                      const changeTypeLabel = changeTypeLabelMap[change.type] || 'Change';
+
+                      return (
+                        <div key={change._id} className="bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">
+                                  ⏳ Pending {changeTypeLabel}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                <span className="font-semibold">{change.requestedByName}</span> wants to {change.action} 
+                                {change.type === 'payment' && ` a payment of ${loanCurrency} ${change.data?.amount?.toFixed(2)}`}
+                                {change.type === 'loan_addition' && ` ${loanCurrency} ${change.data?.amount?.toFixed(2)} to the loan`}
+                              </p>
+                              {change.data?.notes && (
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">"{change.data.notes}"</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {!isOwnChange && (
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handleApprovePendingChange(change._id)}
+                                disabled={approvingChange === change._id}
+                                className="cursor-pointer flex-1 px-3 py-1.5 text-xs font-semibold bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {approvingChange === change._id ? 'Approving...' : '✓ Approve'}
+                              </button>
+                              <button
+                                onClick={() => handleRejectPendingChange(change._id)}
+                                disabled={rejectingChange === change._id}
+                                className="cursor-pointer flex-1 px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {rejectingChange === change._id ? 'Rejecting...' : '✗ Reject'}
+                              </button>
+                            </div>
+                          )}
+                          
+                          {isOwnChange && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-2">
+                              Waiting for approval from the other party
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
@@ -974,6 +1121,7 @@ function StatsCard({ title, value, icon, color = 'blue', loading = false }: Stat
 
 export function MainContent() {
   const { user, loading } = useAuth();
+  const { addToast } = useToast();
   const [modalType, setModalType] = useState<null | 'transaction' | 'loan'>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -990,6 +1138,7 @@ export function MainContent() {
     counterpartyEmail: '',
     dueDate: ''
   });
+  const [requiresCollaboration, setRequiresCollaboration] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PKR');
   const [activeTab, setActiveTab] = useState<'all' | 'income' | 'expense' | 'loans'>('all');
@@ -1003,6 +1152,7 @@ export function MainContent() {
   const closeModal = () => {
     setModalType(null);
     setFormData({ amount: '', description: '', category: '', direction: 'lent', counterpartyName: '', counterpartyEmail: '', dueDate: '' });
+    setRequiresCollaboration(false);
     setErrorMessage(null);
     setTransactionType('expense');
   };
@@ -1106,17 +1256,17 @@ export function MainContent() {
       
       if (res.ok) {
         const data = await res.json();
-        // Update the loan in state
+        // Remove the approved loan from state (it's no longer pending)
         setLoansState(prev => {
-          if (!prev) return [data.data];
-          return prev.map(l => l._id === loanId ? data.data : l);
+          if (!prev) return null;
+          return prev.filter(l => l._id !== loanId);
         });
-        // Refresh dashboard to update summaries
+        // Refresh dashboard to update summaries and show accepted loan
         await fetchDashboardData();
-        alert('Loan approved successfully!');
+        addToast({ type: 'success', title: 'Loan Approved!', description: 'You have successfully approved this loan request.' });
       } else {
         const error = await res.json();
-        alert(error.message || 'Failed to approve loan');
+        addToast({ type: 'error', title: 'Approval Failed', description: error.message || 'Failed to approve loan' });
       }
     } catch (error) {
       console.error('Error approving loan:', error);
@@ -1134,17 +1284,16 @@ export function MainContent() {
       });
       
       if (res.ok) {
-        const data = await res.json();
-        // Update the loan in state
+        // Remove the rejected loan from state completely
         setLoansState(prev => {
-          if (!prev) return [data.data];
-          return prev.map(l => l._id === loanId ? data.data : l);
+          if (!prev) return null;
+          return prev.filter(l => l._id !== loanId);
         });
         await fetchDashboardData();
-        alert('Loan rejected');
+        addToast({ type: 'success', title: 'Loan Rejected', description: 'You have successfully rejected this loan request.' });
       } else {
         const error = await res.json();
-        alert(error.message || 'Failed to reject loan');
+        addToast({ type: 'error', title: 'Rejection Failed', description: error.message || 'Failed to reject loan' });
       }
     } catch (error) {
       console.error('Error rejecting loan:', error);
@@ -1246,7 +1395,7 @@ export function MainContent() {
   const exportToCSV = () => {
     const data = getFilteredActivity();
     if (data.length === 0) {
-      alert('No data to export');
+      addToast({ type: 'info', title: 'No Data', description: 'No data available to export' });
       return;
     }
 
@@ -1316,13 +1465,15 @@ export function MainContent() {
             currency: currency as any,
             description: formData.description,
             direction: formData.direction as any,
-            isPersonal: false, // Guest loans with counterparty name are collaborative
+            isPersonal: false, // Guest loans with counterparty name are non-personal
+            requiresCollaboration: false, // Guest loans are view-only tracking
             counterparty: {
               name: formData.counterpartyName.trim(),
               email: formData.counterpartyEmail.trim() || undefined,
             },
             loanStatus: 'accepted',
             requiresMutualApproval: false,
+            pendingChanges: [], // No pending changes for guest loans
             date: new Date(),
             status: 'active',
             tags: [],
@@ -1361,6 +1512,7 @@ export function MainContent() {
             name: formData.counterpartyName.trim(),
             email: formData.counterpartyEmail.trim() || undefined
           },
+          requiresCollaboration,
           dueDate: formData.dueDate || undefined,
         } : {
           type: transactionType,
@@ -1738,9 +1890,11 @@ export function MainContent() {
                           return prev.map(l => l._id === u._id ? { ...l, ...u } : l);
                         });
                       }}
+                      currentUserId={user?.firebaseUid || user?._id || ''}
+                      addToast={addToast}
                     />
                   ) : (
-                    <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} />
+                    <EntryCard key={item._id} entry={item} onUpdate={fetchDashboardData} addToast={addToast} />
                   )
                 ))}
               </div>
@@ -1988,6 +2142,27 @@ export function MainContent() {
                       className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       placeholder="email@example.com"
                     />
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 sm:p-4">
+                    <label className="flex items-start gap-2.5 sm:gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={requiresCollaboration}
+                        onChange={(e) => setRequiresCollaboration(e.target.checked)}
+                        className="cursor-pointer mt-0.5 w-4 h-4 sm:w-5 sm:h-5 text-blue-600 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                          Share & Collaborate with Counterparty
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                          <span className="font-medium text-blue-600 dark:text-blue-400">Checked:</span> Counterparty can view, add payments, and collaborate in real-time (requires their approval).
+                          <br />
+                          <span className="font-medium text-gray-700 dark:text-gray-300">Unchecked:</span> Private tracking - only you can see this loan.
+                        </div>
+                      </div>
+                    </label>
                   </div>
 
                   <div>

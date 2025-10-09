@@ -187,6 +187,49 @@ const PendingApprovalSchema = new Schema<PendingApproval>({
   _id: true,
 });
 
+// Schema for pending changes in collaborative loans
+const PendingChangeSchema = new Schema({
+  type: {
+    type: String,
+    required: true,
+    enum: ['payment', 'loan_addition', 'payment_deletion', 'addition_deletion', 'loan_deletion'],
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: ['add', 'delete', 'modify'],
+  },
+  data: {
+    type: Schema.Types.Mixed,
+    required: true,
+  },
+  requestedBy: {
+    type: String,
+    required: true,
+  },
+  requestedByName: {
+    type: String,
+    required: true,
+  },
+  status: {
+    type: String,
+    required: true,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+    index: true,
+  },
+  reviewedAt: Date,
+  reviewedBy: String,
+  reviewerName: String,
+  reason: {
+    type: String,
+    maxlength: 500,
+  },
+}, {
+  timestamps: true,
+  _id: true,
+});
+
 const LoanSchema = new Schema(
   {
     userId: {
@@ -278,6 +321,8 @@ const LoanSchema = new Schema(
     },
     collaborators: [LoanCollaboratorSchema],
     pendingApprovals: [PendingApprovalSchema],
+    // Pending changes for collaborative loans requiring mutual approval
+    pendingChanges: [PendingChangeSchema],
     // Immutable audit trail for anti-cheating
     auditTrail: [AuditEntrySchema],
     // Rejection reason if loan was rejected
@@ -290,6 +335,14 @@ const LoanSchema = new Schema(
     requiresMutualApproval: {
       type: Boolean,
       default: true,
+    },
+    // True collaborative loan - both parties can add payments, comments, etc.
+    // False means counterparty can only view the loan (tracked but not collaborative)
+    // Personal loans automatically have this as false
+    requiresCollaboration: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     shareToken: {
       type: String,
@@ -595,6 +648,11 @@ LoanSchema.methods.addAuditEntry = function(
   details: any,
   ipAddress?: string
 ) {
+  // Initialize auditTrail if it doesn't exist
+  if (!this.auditTrail) {
+    this.auditTrail = [];
+  }
+  
   // Generate hash for blockchain-like integrity
   const crypto = require('crypto');
   const previousHash = this.auditTrail.length > 0 

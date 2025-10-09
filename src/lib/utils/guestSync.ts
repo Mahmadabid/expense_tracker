@@ -82,6 +82,7 @@ export async function syncGuestDataToCloud(): Promise<SyncResult> {
             description: loan.description,
             direction: loan.direction,
             isPersonal: loan.isPersonal || false,
+            requiresCollaboration: loan.requiresCollaboration || false,
             counterparty: loan.counterparty ? {
               name: loan.counterparty.name,
               email: loan.counterparty.email,
@@ -101,19 +102,25 @@ export async function syncGuestDataToCloud(): Promise<SyncResult> {
             
             for (const payment of loan.payments) {
               try {
-                await fetch(`/api/loans/${newLoanId}/payments`, {
+                const paymentResponse = await fetch(`/api/loans/${newLoanId}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     ...authHeaders,
                   },
                   body: JSON.stringify({
+                    action: 'addPayment',
                     amount: payment.amount,
                     date: payment.date,
                     method: payment.method,
                     notes: payment.notes,
                   }),
                 });
+                
+                if (!paymentResponse.ok) {
+                  const error = await paymentResponse.json();
+                  result.errors.push(`Payment sync error: ${error.message || 'Unknown error'}`);
+                }
               } catch (paymentError) {
                 result.errors.push(`Payment sync error: ${paymentError}`);
               }

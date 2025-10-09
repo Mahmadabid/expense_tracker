@@ -89,6 +89,55 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const canEdit = loan.userId === a.uid || loan.canUserEdit(a.uid);
     if (!canEdit) return unauthorizedResponse('Not authorized');
 
+    const isOwner = loan.userId === a.uid;
+    const requiresCollaboration = (loan as any).requiresCollaboration;
+
+    // If collaborative and deleter isn't owner, create pending change for deletion
+    if (requiresCollaboration && !isOwner) {
+      const mongoose = await import('mongoose');
+      // Resolve user name
+      let userName: string | undefined = undefined;
+      try {
+        const { UserModel } = await import('@/lib/models');
+        const userDoc = await UserModel.findOne({ firebaseUid: a.uid });
+        userName = userDoc?.displayName || 'User';
+      } catch {}
+
+      const pendingChange = {
+        _id: new mongoose.default.Types.ObjectId(),
+        type: 'addition_deletion',
+        action: 'delete',
+        data: { additionId },
+        requestedBy: a.uid,
+        requestedByName: userName || 'User',
+        status: 'pending',
+        createdAt: new Date()
+      } as any;
+
+      (loan as any).pendingChanges = (loan as any).pendingChanges || [];
+      (loan as any).pendingChanges.push(pendingChange);
+      await loan.save();
+
+      // Notify owner
+      try {
+        const { NotificationModel } = await import('@/lib/models');
+        await NotificationModel.create({
+          userId: loan.userId,
+          title: 'Addition Deletion Pending Approval',
+          message: `${userName || 'Someone'} wants to delete a loan addition on ${loan.currency || 'PKR'}`,
+          type: 'loan_update',
+          relatedLoan: loan._id,
+          relatedUser: a.uid,
+          createdAt: new Date()
+        });
+      } catch (err) {
+        console.error('Failed to send notification:', err);
+      }
+
+      return successResponse(pendingChange, 'Addition deletion submitted for approval', 201);
+    }
+
+    // Non-collaborative or owner: perform immediate deletion
     const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
     const decrypted: any = decryptObject((loan as any).encryptedData);
     const additions: any[] = decrypted.loanAdditions || [];

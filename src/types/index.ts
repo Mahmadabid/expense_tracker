@@ -54,6 +54,7 @@ export interface Loan extends Entry {
   direction: LoanDirection;
   loanStatus: LoanStatus; // Approval status
   isPersonal: boolean; // True for personal tracking, false for collaborative loans
+  requiresCollaboration: boolean; // True for real-time collaboration, false for view-only counterparty
   counterparty?: {
     userId?: string; // If registered user
     name: string;
@@ -68,6 +69,7 @@ export interface Loan extends Entry {
   comments: LoanComment[];
   collaborators: LoanCollaborator[];
   pendingApprovals: PendingApproval[];
+  pendingChanges: PendingChange[]; // Pending changes requiring approval in collaborative loans
   auditTrail: AuditEntry[]; // Immutable history
   rejectionReason?: string;
   requiresMutualApproval: boolean;
@@ -123,6 +125,24 @@ export interface PendingApproval {
   data?: unknown; // Additional data for the action
   expiresAt: Date;
   createdAt: Date;
+}
+
+export type PendingChangeType = 'payment' | 'loan_addition' | 'payment_deletion' | 'addition_deletion' | 'loan_deletion';
+export type PendingChangeAction = 'add' | 'delete' | 'modify';
+
+export interface PendingChange {
+  _id: string;
+  type: PendingChangeType;
+  action: PendingChangeAction;
+  data: any; // The actual change data (payment, addition, etc.)
+  requestedBy: string;
+  requestedByName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  reviewedAt?: Date;
+  reviewedBy?: string;
+  reviewerName?: string;
+  reason?: string; // Rejection reason
 }
 
 export interface FilterOptions {

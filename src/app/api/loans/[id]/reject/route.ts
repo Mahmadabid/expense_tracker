@@ -7,7 +7,7 @@ import { successResponse, unauthorizedResponse, serverErrorResponse, errorRespon
 // POST /api/loans/[id]/reject - Reject a loan request
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -18,14 +18,22 @@ export async function POST(
     if (!decoded) return unauthorizedResponse('Invalid token');
 
     const userId = decoded.uid;
-    const body = await request.json();
-    const { reason } = body;
+    
+    // Handle empty body gracefully
+    let reason = undefined;
+    try {
+      const body = await request.json();
+      reason = body?.reason;
+    } catch (e) {
+      // No body provided, that's okay
+    }
 
     await connectDB();
+    const { id } = await params;
 
     // Optimized: Query with counterparty filter directly
     const loan = await LoanModel.findOne({ 
-      _id: params.id, 
+      _id: id, 
       counterpartyUserId: userId 
     }).select('userId counterpartyUserId loanStatus version lastModifiedBy');
     

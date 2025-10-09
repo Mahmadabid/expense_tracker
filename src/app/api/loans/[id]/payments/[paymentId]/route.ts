@@ -126,6 +126,55 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return unauthorizedResponse('Not authorized to delete this payment');
     }
 
+    const isOwner = loan.userId === a.uid;
+    const requiresCollaboration = (loan as any).requiresCollaboration;
+
+    // If this is a collaborative loan and the deleter is not the owner, create a pending change
+    if (requiresCollaboration && !isOwner) {
+      const mongoose = await import('mongoose');
+      // Resolve user display name
+      let userName: string | undefined = undefined;
+      try {
+        const { UserModel } = await import('@/lib/models');
+        const userDoc = await UserModel.findOne({ firebaseUid: a.uid });
+        userName = userDoc?.displayName || 'User';
+      } catch {}
+
+      const pendingChange = {
+        _id: new (await import('mongoose')).default.Types.ObjectId(),
+        type: 'payment_deletion',
+        action: 'delete',
+        data: { paymentId: params.paymentId },
+        requestedBy: a.uid,
+        requestedByName: userName || 'User',
+        status: 'pending',
+        createdAt: new Date()
+      } as any;
+
+      (loan as any).pendingChanges = (loan as any).pendingChanges || [];
+      (loan as any).pendingChanges.push(pendingChange);
+      await loan.save();
+
+      // Notify owner
+      try {
+        const { NotificationModel } = await import('@/lib/models');
+        await NotificationModel.create({
+          userId: loan.userId,
+          title: 'Payment Deletion Pending Approval',
+          message: `${userName || 'Someone'} wants to delete a payment of ${loan.currency || 'PKR'} ${payment.amount.toFixed(2)}`,
+          type: 'loan_update',
+          relatedLoan: loan._id,
+          relatedUser: a.uid,
+          createdAt: new Date()
+        });
+      } catch (err) {
+        console.error('Failed to send notification:', err);
+      }
+
+      return successResponse(pendingChange, 'Payment deletion submitted for approval', 201);
+    }
+
+    // Owner or non-collaborative loan: perform immediate deletion
     // Restore the amount to remaining balance
     loan.remainingAmount += payment.amount;
     

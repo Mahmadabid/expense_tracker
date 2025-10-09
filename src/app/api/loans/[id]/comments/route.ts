@@ -64,10 +64,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const loan = await LoanModel.findById(params.id);
     if (!loan) return notFoundResponse('Loan not found');
 
-    // Allow loan owner, counterparty, or collaborators to add comments
+    // Only owner can comment on non-collaborative loans
+    // For collaborative loans, counterparty and collaborators can also comment
+    const requiresCollaboration = (loan as any).requiresCollaboration === true;
     const canComment = loan.userId === a.uid || 
-                      loan.counterparty?.userId === a.uid ||
-                      loan.collaborators?.some(c => c.userId === a.uid && c.status === 'accepted');
+                      (requiresCollaboration && (
+                        loan.counterparty?.userId === a.uid ||
+                        loan.collaborators?.some(c => c.userId === a.uid && c.status === 'accepted')
+                      ));
     
     if (!canComment) {
       return unauthorizedResponse('Not authorized to comment on this loan');

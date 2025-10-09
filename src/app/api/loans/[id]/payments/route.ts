@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await connectDB();
 
     // Fetch only required fields to reduce payload
-    const loan = await LoanModel.findById(id).select('userId encryptedData collaborators version lastModifiedBy direction status currency date tags createdBy pendingApprovals dueDate');
+    const loan = await LoanModel.findById(id).select('userId encryptedData collaborators version lastModifiedBy direction status currency date tags createdBy pendingApprovals dueDate requiresCollaboration');
     if (!loan) return notFoundResponse('Loan not found');
 
     // Decrypt sensitive bundle
@@ -33,10 +33,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { counterparty, payments = [], remainingAmount, amount: totalAmount, originalAmount, baseOriginalAmount, loanAdditions = [], description, comments, category, tags } = decrypted;
 
-    // Authorization: owner, counterparty, accepted collaborator
+    // Authorization: only owner can add payments for non-collaborative loans
+    // For collaborative loans, counterparty and accepted collaborators can also add payments
+    const requiresCollaboration = anyLoan.requiresCollaboration === true;
     const canAddPayment = loan.userId === a.uid ||
-      (counterparty && counterparty.userId === a.uid) ||
-      loan.collaborators?.some((c: any) => c.userId === a.uid && c.status === 'accepted');
+      (requiresCollaboration && (
+        (counterparty && counterparty.userId === a.uid) ||
+        loan.collaborators?.some((c: any) => c.userId === a.uid && c.status === 'accepted')
+      ));
 
     if (!canAddPayment) {
       return unauthorizedResponse('Not authorized to add payments to this loan');
@@ -112,14 +116,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await refreshed.save();
 
-    // Send notification to the other party
+    // Send notification to the other party only for collaborative loans
     const otherPartyId = loan.userId === a.uid ? counterparty?.userId : loan.userId;
-    if (otherPartyId) {
+    if (requiresCollaboration && otherPartyId) {
       await NotificationModel.create({
         userId: otherPartyId,
         type: 'payment_added',
         title: 'Payment Added to Loan',
-        message: `${userName} added a payment of ${loan.currency} ${amount} to your loan`,
+        message: `${userName} added a payment of ${loan.currency} ${amount} to your collaborative loan`,
         relatedId: String(loan._id),
         relatedModel: 'Loan',
         actionUrl: `/loans/${String(loan._id)}`,

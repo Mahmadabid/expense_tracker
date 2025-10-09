@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useToast } from '@/components/ui/Toaster';
 import { User as FirebaseUser } from 'firebase/auth';
 import { User, AuthContextType } from '@/types';
 import { 
@@ -21,6 +22,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser: FirebaseUser | null) => {
@@ -28,6 +30,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (firebaseUser) {
         try {
+          // Check if there's guest data before processing authentication
+          const wasGuest = localStorage.getItem('guestToken');
+          const hasGuestData = wasGuest ? hasGuestDataToSync() : false;
+          const guestCounts = hasGuestData ? getGuestDataCount() : null;
+          
           // Convert Firebase user to our User type
           const appUser: User = {
             _id: '', // Will be set from backend
@@ -59,6 +66,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
           } else {
             console.error('Failed to sync user with backend');
             setUser(appUser);
+          }
+          
+          // After successful authentication, sync guest data if any exists
+          if (hasGuestData && guestCounts && wasGuest) {
+            // Remove guest token to prevent showing as guest anymore
+            localStorage.removeItem('guestToken');
+            
+            const confirmSync = window.confirm(
+              `You have ${guestCounts.entries} entries and ${guestCounts.loans} loans saved as a guest. ` +
+              `Would you like to sync them to your account?`
+            );
+            
+            if (confirmSync) {
+              try {
+                const result = await syncGuestDataToCloud();
+                
+                if (result.success) {
+                  addToast({ type: 'success', title: 'Synced', description: `Successfully synced ${result.entriesSynced} entries and ${result.loansSynced} loans to your account!` });
+                } else {
+                  addToast({ type: 'warning', title: 'Partial Sync', description: `Partial sync: ${result.entriesSynced} entries, ${result.loansSynced} loans. ${result.errors.length > 0 ? 'Errors: ' + result.errors.join(', ') : ''}` });
+                }
+              } catch (syncError) {
+                console.error('Sync error:', syncError);
+                addToast({ type: 'error', title: 'Sync Failed', description: 'Failed to sync guest data. Your local data is still saved.' });
+              }
+            }
+          } else if (wasGuest) {
+            // No data to sync, just remove guest token
+            localStorage.removeItem('guestToken');
           }
         } catch (error) {
           console.error('Error processing user data:', error);
@@ -94,39 +130,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       
-      // Check if there's guest data before signing in
-      const hasGuestData = hasGuestDataToSync();
-      const guestCounts = hasGuestData ? getGuestDataCount() : null;
-      
+      // Trigger Google sign in - guest data sync will be handled in onAuthStateChange
       await signInWithGoogle();
-      
-      // After successful sign in, sync guest data if any exists
-      if (hasGuestData && guestCounts) {
-        const confirmSync = window.confirm(
-          `You have ${guestCounts.entries} entries and ${guestCounts.loans} loans saved locally. ` +
-          `Would you like to sync them to your account?`
-        );
-        
-        if (confirmSync) {
-          try {
-            const result = await syncGuestDataToCloud();
-            
-            if (result.success) {
-              alert(
-                `Successfully synced ${result.entriesSynced} entries and ${result.loansSynced} loans to your account!`
-              );
-            } else {
-              alert(
-                `Partial sync completed: ${result.entriesSynced} entries, ${result.loansSynced} loans. ` +
-                `Errors: ${result.errors.join(', ')}`
-              );
-            }
-          } catch (syncError) {
-            console.error('Sync error:', syncError);
-            alert('Failed to sync guest data. Your local data is still saved.');
-          }
-        }
-      }
       
       // User state will be updated by the auth state listener
     } catch (error) {

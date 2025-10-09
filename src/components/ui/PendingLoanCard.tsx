@@ -1,5 +1,6 @@
 import React from 'react';
 import { Loan } from '@/types';
+import { useToast } from './Toaster';
 
 interface PendingLoanCardProps {
   loan: Loan;
@@ -16,6 +17,7 @@ export default function PendingLoanCard({
   isCounterparty,
   currentUserId,
 }: PendingLoanCardProps) {
+  const { addToast } = useToast();
   const [isApproving, setIsApproving] = React.useState(false);
   const [isRejecting, setIsRejecting] = React.useState(false);
   const [showRejectDialog, setShowRejectDialog] = React.useState(false);
@@ -27,9 +29,10 @@ export default function PendingLoanCard({
     setIsApproving(true);
     try {
       await onApprove(loan._id);
+      addToast({ type: 'success', title: 'Loan Approved', description: 'You have successfully approved this loan.' });
     } catch (error) {
       console.error('Failed to approve loan:', error);
-      alert('Failed to approve loan. Please try again.');
+      addToast({ type: 'error', title: 'Approval Failed', description: 'Failed to approve loan. Please try again.' });
     } finally {
       setIsApproving(false);
     }
@@ -43,9 +46,10 @@ export default function PendingLoanCard({
       await onReject(loan._id, rejectionReason.trim() || undefined);
       setShowRejectDialog(false);
       setRejectionReason('');
+      addToast({ type: 'success', title: 'Loan Rejected', description: 'You have successfully rejected this loan request.' });
     } catch (error) {
       console.error('Failed to reject loan:', error);
-      alert('Failed to reject loan. Please try again.');
+      addToast({ type: 'error', title: 'Rejection Failed', description: 'Failed to reject loan. Please try again.' });
     } finally {
       setIsRejecting(false);
     }
