@@ -91,7 +91,7 @@ export function RecurringTransactions({ recurring, onAdd, onDelete, onToggle }: 
 
       {recurring.length === 0 ? (
         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center py-6">
-          No recurring transactions. Click "+ Add Recurring" to create one.
+          No recurring transactions. Click &quot;+ Add Recurring&quot; to create one.
         </p>
       ) : (
         <div className="space-y-3">

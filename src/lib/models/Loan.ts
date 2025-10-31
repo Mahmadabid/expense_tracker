@@ -1,6 +1,7 @@
 import mongoose, { Schema, model, Document, Model } from 'mongoose';
 import { Loan, Payment, LoanCollaborator, PendingApproval } from '@/types';
 import { encryptObject, decryptObject } from '@/lib/utils/encryption';
+import crypto from 'crypto';
 
 interface LoanDocument extends Omit<Loan, '_id'>, Document {
   addPayment(payment: Omit<Payment, '_id' | 'createdAt'>): Payment;
@@ -21,6 +22,7 @@ interface LoanModel extends Model<LoanDocument> {
   findByCounterparty(userId: string, counterpartyUserId: string): Promise<LoanDocument[]>;
 }
 
+// Payment Schema - internal use
 const PaymentSchema = new Schema<Payment>({
   amount: {
     type: Number,
@@ -54,6 +56,7 @@ const PaymentSchema = new Schema<Payment>({
   _id: true,
 });
 
+// Loan Comment Schema - internal use
 const LoanCommentSchema = new Schema({
   userId: {
     type: String,
@@ -636,7 +639,7 @@ LoanSchema.methods.canUserAddPayment = function(userId: string) {
   return collaborator && collaborator.status === 'accepted';
 };
 
-LoanSchema.methods.requiresApproval = function(action: string, userId: string) {
+LoanSchema.methods.requiresApproval = function(action: string) {
   const destructiveActions = ['delete', 'close'];
   return destructiveActions.includes(action) && this.collaborators.length > 0;
 };
@@ -653,8 +656,6 @@ LoanSchema.methods.addAuditEntry = function(
     this.auditTrail = [];
   }
   
-  // Generate hash for blockchain-like integrity
-  const crypto = require('crypto');
   const previousHash = this.auditTrail.length > 0 
     ? this.auditTrail[this.auditTrail.length - 1].hash 
     : 'genesis';
@@ -686,9 +687,7 @@ LoanSchema.methods.addAuditEntry = function(
   return auditEntry;
 };
 
-LoanSchema.methods.verifyAuditIntegrity = function() {
-  const crypto = require('crypto');
-  
+LoanSchema.methods.verifyAuditIntegrity = function() {  
   for (let i = 0; i < this.auditTrail.length; i++) {
     const entry = this.auditTrail[i];
     const expectedPreviousHash = i === 0 ? 'genesis' : this.auditTrail[i - 1].hash;

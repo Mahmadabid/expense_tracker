@@ -131,7 +131,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     // If this is a collaborative loan and the deleter is not the owner, create a pending change
     if (requiresCollaboration && !isOwner) {
-      const mongoose = await import('mongoose');
       // Resolve user display name
       let userName: string | undefined = undefined;
       try {

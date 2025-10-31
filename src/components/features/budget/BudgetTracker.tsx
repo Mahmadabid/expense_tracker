@@ -58,7 +58,7 @@ export function BudgetTracker({ budgets, onAddBudget, onDeleteBudget }: BudgetTr
 
       {budgets.length === 0 ? (
         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center py-6">
-          No budget goals set. Click "+ Add Goal" to create one.
+          No budget goals set. Click &quot;+ Add Goal&quot; to create one.
         </p>
       ) : (
         <div className="space-y-3">

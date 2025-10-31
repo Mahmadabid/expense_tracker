@@ -43,7 +43,7 @@ export interface AuditEntry {
   userId: string;
   userName: string;
   timestamp: Date;
-  details: any;
+  details: unknown;
   hash: string;
   previousHash?: string;
   ipAddress?: string;
@@ -134,7 +134,7 @@ export interface PendingChange {
   _id: string;
   type: PendingChangeType;
   action: PendingChangeAction;
-  data: any; // The actual change data (payment, addition, etc.)
+  data: unknown; // The actual change data (payment, addition, etc.)
   requestedBy: string;
   requestedByName: string;
   status: 'pending' | 'approved' | 'rejected';

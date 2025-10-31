@@ -97,7 +97,7 @@ export function decrypt(encryptedData: string): string {
  * Encrypt an object/JSON data (converts to JSON string, then encrypts)
  * This is the main function to use for bundling sensitive data
  */
-export function encryptObject(obj: any): string {
+export function encryptObject<T>(obj: T): string {
   if (!obj) return '';
   try {
     const jsonString = JSON.stringify(obj);
@@ -112,7 +112,7 @@ export function encryptObject(obj: any): string {
  * Decrypt an encrypted JSON object (decrypts string, then parses JSON)
  * Returns the original object
  */
-export function decryptObject<T = any>(encryptedData: string): T | null {
+export function decryptObject<T = Record<string, unknown>>(encryptedData: string): T | null {
   if (!encryptedData) return null;
   try {
     const decrypted = decrypt(encryptedData);

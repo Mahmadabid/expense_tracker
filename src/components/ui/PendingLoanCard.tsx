@@ -104,7 +104,7 @@ export default function PendingLoanCard({
 
           {loan.description && (
             <p className="text-sm text-gray-600 mt-2 italic">
-              "{loan.description}"
+              &quot;{loan.description}&quot;
             </p>
           )}
 

@@ -596,7 +596,7 @@ export function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate, currentUserId
                                 {change.type === 'payment' && ` a payment of ${loanCurrency} ${change.data?.amount?.toFixed(2)}`}
                                 {change.type === 'loan_addition' && ` ${loanCurrency} ${change.data?.amount?.toFixed(2)} to the loan`}
                               </p>
-                              {change.data?.notes && <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">"{change.data.notes}"</p>}
+                              {change.data?.notes && <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">&quot;{change.data.notes}&quot;</p>}
                             </div>
                           </div>
 

@@ -312,7 +312,7 @@ export function checkStorageAvailable(): { available: boolean; usage?: string } 
     
     // Estimate storage usage
     let totalSize = 0;
-    for (let key in localStorage) {
+    for (const key in localStorage) {
       if (localStorage.hasOwnProperty(key)) {
         totalSize += localStorage[key].length + key.length;
       }
@@ -324,7 +324,8 @@ export function checkStorageAvailable(): { available: boolean; usage?: string } 
       available: true,
       usage: `${usageMB} MB used`,
     };
-  } catch (e) {
+  } catch (error) {
+    console.warn('Local storage availability check failed:', error);
     return {
       available: false,
     };
