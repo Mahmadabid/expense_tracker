@@ -33,11 +33,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const body = await request.json();
-    const { amount, description } = body;
+    const { amount, description, date } = body;
 
     // Validate amount
     if (!amount || amount <= 0) {
       return errorResponse('Amount must be positive');
+    }
+
+    const additionDate = date ? new Date(date) : new Date();
+    if (isNaN(additionDate.getTime())) {
+      return errorResponse('Invalid date provided for the additional loan amount');
     }
 
     // Resolve user display name
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         _id: new mongoose.default.Types.ObjectId(),
         type: 'loan_addition',
         action: 'add',
-        data: { amount, description },
+  data: { amount, description, date: additionDate.toISOString() },
         requestedBy: a.uid,
         requestedByName: userName || 'User',
         status: 'pending',
@@ -121,7 +126,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const loanAddition = {
       _id: new mongoose.default.Types.ObjectId(),
       amount: amount,
-      date: new Date(),
+  date: additionDate,
       description: description || undefined,
       addedBy: a.uid,
       addedByName: userName,
@@ -134,8 +139,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       _id: new mongoose.default.Types.ObjectId(),
       userId: a.uid,
       userName: userName || 'System',
-      message: `Added +${loan.currency || 'PKR'} ${amount.toFixed(2)}${description ? ' (' + description + ')' : ''}`,
-      createdAt: new Date(),
+  message: `Added +${loan.currency || 'PKR'} ${amount.toFixed(2)}${description ? ' (' + description + ')' : ''}`,
+  createdAt: additionDate,
     };
 
     // Rebuild encrypted data with updated amounts
@@ -148,8 +153,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       description: decrypted.description || '',
       counterparty: decrypted.counterparty || null,
       payments: decrypted.payments || [],
-      loanAdditions: [...(decrypted.loanAdditions || []), loanAddition],
-      comments: [...(decrypted.comments || []), addLoanComment],
+  loanAdditions: [...(decrypted.loanAdditions || []), loanAddition],
+  comments: [...(decrypted.comments || []), addLoanComment],
       category: decrypted.category || '',
       tags: decrypted.tags || [],
     };

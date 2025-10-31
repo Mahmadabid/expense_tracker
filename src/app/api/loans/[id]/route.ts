@@ -97,14 +97,46 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         version: 1,
         createdAt: new Date(),
       };
-      if (!loan.payments) (loan as any).payments = [];
-      (loan as any).payments.push(newPayment);
-      (loan as any).remainingAmount = Math.max(0, (loan as any).remainingAmount - amount);
-      if ((loan as any).remainingAmount === 0) loan.status = 'paid';
+      const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+      let decrypted: any = {};
+
+      if ((loan as any).encryptedData) {
+        try {
+          decrypted = decryptObject((loan as any).encryptedData);
+        } catch (err) {
+          console.error('Failed to decrypt loan data for payment:', err);
+          return serverErrorResponse('Unable to process loan payment');
+        }
+      }
+
+      const existingPayments: any[] = Array.isArray(decrypted.payments) ? decrypted.payments : [];
+      const updatedPayments = [...existingPayments, newPayment];
+      const loanAdditions: any[] = Array.isArray(decrypted.loanAdditions) ? decrypted.loanAdditions : [];
+
+      const additionsTotal = loanAdditions.reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+      const baseOriginal = Number(decrypted.baseOriginalAmount ?? decrypted.originalAmount ?? decrypted.amount ?? 0);
+      const totalPrincipal = baseOriginal + additionsTotal;
+      const totalPaid = updatedPayments.reduce((sum: number, payment: any) => sum + (Number(payment?.amount) || 0), 0);
+      const newRemaining = Math.max(totalPrincipal - totalPaid, 0);
+
+      decrypted.payments = updatedPayments;
+      decrypted.loanAdditions = loanAdditions;
+      decrypted.originalAmount = baseOriginal;
+      decrypted.baseOriginalAmount = baseOriginal;
+      decrypted.amount = totalPrincipal;
+      decrypted.remainingAmount = newRemaining;
+
+      const newEncryptedData = encryptObject(decrypted);
+      (loan as any).encryptedData = newEncryptedData;
+      (loan as any).remainingAmount = newRemaining;
+      (loan as any).payments = updatedPayments;
+      loan.status = newRemaining === 0 ? 'paid' : 'active';
       loan.version = (loan.version || 1) + 1;
       loan.lastModifiedBy = a.uid;
       await loan.save();
-      return successResponse(newPayment, 'Payment added', 201);
+
+      const updatedLoan = await LoanModel.findById(params.id);
+      return successResponse({ loan: updatedLoan }, 'Payment added', 201);
     }
 
     if (action === 'addComment') {
@@ -198,32 +230,174 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if (!loan) return unauthorizedResponse('Loan not found or not allowed');
 
     const body = await request.json();
-    const allowed = ['description','amount','status','dueDate','counterparty'];
+    const allowed = ['description','status','dueDate','counterparty'] as const;
     const changes: any[] = [];
+    const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+    let decrypted: any = {};
+
+    if ((loan as any).encryptedData) {
+      try {
+        decrypted = decryptObject((loan as any).encryptedData) || {};
+      } catch (err) {
+        console.error('Failed to decrypt loan data for update:', err);
+        return serverErrorResponse('Unable to process loan update');
+      }
+    }
+
+    if (!decrypted || typeof decrypted !== 'object') {
+      decrypted = {};
+    }
+
+    const cloneSubdocs = (value: any): any[] => {
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => {
+        if (!item) return item;
+        if (typeof item.toObject === 'function') {
+          const plain = item.toObject({ depopulate: true, getters: false, virtuals: false, transform: undefined });
+          if (plain && plain._id && typeof plain._id === 'object' && typeof plain._id.toString === 'function') {
+            plain._id = plain._id.toString();
+          }
+          return plain;
+        }
+        if (typeof item.toJSON === 'function') {
+          const plain = item.toJSON();
+          if (plain && plain._id && typeof plain._id === 'object' && typeof plain._id.toString === 'function') {
+            plain._id = plain._id.toString();
+          }
+          return plain;
+        }
+        try {
+          return JSON.parse(JSON.stringify(item));
+        } catch {
+          return item;
+        }
+      });
+    };
+
+    const payments = cloneSubdocs(decrypted.payments ?? (loan as any).payments ?? []);
+    const additions = cloneSubdocs(decrypted.loanAdditions ?? (loan as any).loanAdditions ?? []);
+
+    decrypted.payments = payments;
+    decrypted.loanAdditions = additions;
+
+    loan.set('payments', payments, { strict: false });
+    loan.set('loanAdditions', additions, { strict: false });
+
+    let sensitiveChanged = false;
+
+    if (body.amount !== undefined) {
+      const newBasePrincipal = Number(body.amount);
+      if (!Number.isFinite(newBasePrincipal) || newBasePrincipal <= 0) {
+        return errorResponse('Amount must be positive');
+      }
+
+      const totalAdditions = additions.reduce((sum: number, addition: any) => sum + (Number(addition?.amount) || 0), 0);
+      const totalPaid = payments.reduce((sum: number, payment: any) => sum + (Number(payment?.amount) || 0), 0);
+
+      const previousBaseOriginal = Number(
+        decrypted.baseOriginalAmount ??
+        decrypted.originalAmount ??
+        (loan as any).originalAmount ??
+        (loan as any).baseOriginalAmount ??
+        Math.max(((loan as any).amount || 0) - totalAdditions, 0)
+      );
+      const previousTotal = Number(decrypted.amount ?? (loan as any).amount ?? (previousBaseOriginal + totalAdditions));
+      const calculatedFallbackRemaining = Math.max(previousTotal - totalPaid, 0);
+      const previousRemaining = Number(decrypted.remainingAmount ?? (loan as any).remainingAmount ?? calculatedFallbackRemaining);
+
+      const newTotalPrincipal = newBasePrincipal + totalAdditions;
+      if (totalPaid > newTotalPrincipal) {
+        return errorResponse('Existing payments exceed the new principal amount');
+      }
+
+      decrypted.originalAmount = newBasePrincipal;
+      decrypted.baseOriginalAmount = newBasePrincipal;
+      decrypted.amount = newTotalPrincipal;
+      decrypted.remainingAmount = Math.max(newTotalPrincipal - totalPaid, 0);
+      sensitiveChanged = true;
+
+      loan.set('originalAmount', decrypted.originalAmount, { strict: false });
+      loan.set('amount', decrypted.amount, { strict: false });
+      loan.set('remainingAmount', decrypted.remainingAmount, { strict: false });
+
+      if (previousBaseOriginal !== newBasePrincipal) {
+        changes.push({ field: 'originalAmount', oldValue: previousBaseOriginal, newValue: newBasePrincipal });
+        changes.push({ field: 'baseOriginalAmount', oldValue: previousBaseOriginal, newValue: newBasePrincipal });
+      }
+      if (previousTotal !== newTotalPrincipal) {
+        changes.push({ field: 'amount', oldValue: previousTotal, newValue: newTotalPrincipal });
+      }
+      if (previousRemaining !== decrypted.remainingAmount) {
+        changes.push({ field: 'remainingAmount', oldValue: previousRemaining, newValue: decrypted.remainingAmount });
+      }
+    }
 
     for (const key of allowed) {
-      if (body[key] !== undefined) {
-        const oldValue = (loan as any)[key];
-        if (key === 'amount') {
-          if (body.amount <= 0) return errorResponse('Amount must be positive');
-          loan.amount = body.amount;
-          // Adjust remaining if amount reduced below remaining
-          if (loan.remainingAmount > body.amount) loan.remainingAmount = body.amount;
-        } else if (key === 'dueDate') {
-          loan.dueDate = body.dueDate ? new Date(body.dueDate) : undefined;
-        } else if (key === 'counterparty') {
-          // Can't update counterparty for personal loans
-          if ((loan as any).isPersonal) return errorResponse('Cannot update counterparty for personal loans');
-          if (!body.counterparty.name) return errorResponse('Counterparty name required');
-          if (loan.counterparty) {
-            loan.counterparty.name = body.counterparty.name;
-            loan.counterparty.email = body.counterparty.email || undefined;
-            loan.counterparty.phone = body.counterparty.phone || undefined;
-          }
-        } else {
-          (loan as any)[key] = body[key];
+      if (body[key] === undefined) continue;
+
+      if (key === 'counterparty') {
+        if ((loan as any).isPersonal) return errorResponse('Cannot update counterparty for personal loans');
+        const incoming = body.counterparty || {};
+        const incomingName = typeof incoming.name === 'string' ? incoming.name.trim() : '';
+        if (!incomingName) return errorResponse('Counterparty name required');
+
+        const existingCounterparty =
+          (decrypted.counterparty && typeof decrypted.counterparty === 'object')
+            ? JSON.parse(JSON.stringify(decrypted.counterparty))
+            : (loan.counterparty ? JSON.parse(JSON.stringify(loan.counterparty)) : null);
+
+        const updatedCounterparty = {
+          ...(existingCounterparty || {}),
+          name: incomingName,
+          email: typeof incoming.email === 'string' && incoming.email.trim().length > 0 ? incoming.email.trim() : undefined,
+          phone: typeof incoming.phone === 'string' && incoming.phone.trim().length > 0 ? incoming.phone.trim() : undefined,
+        };
+
+        if (JSON.stringify(existingCounterparty) === JSON.stringify(updatedCounterparty)) {
+          continue;
         }
-        changes.push({ field: key, oldValue, newValue: (loan as any)[key] });
+
+        decrypted.counterparty = updatedCounterparty;
+        loan.set('counterparty', updatedCounterparty, { strict: false });
+        sensitiveChanged = true;
+        if (incoming.userId) {
+          loan.counterpartyUserId = incoming.userId;
+        }
+        changes.push({ field: key, oldValue: existingCounterparty, newValue: updatedCounterparty });
+        continue;
+      }
+
+      if (key === 'description') {
+        const newDescription = typeof body.description === 'string' ? body.description.trim() : '';
+        const oldValue = typeof decrypted.description === 'string' ? decrypted.description : '';
+        if (newDescription === oldValue) continue;
+
+        decrypted.description = newDescription;
+        loan.set('description', newDescription, { strict: false });
+        sensitiveChanged = true;
+        changes.push({ field: key, oldValue, newValue: newDescription });
+        continue;
+      }
+
+      if (key === 'dueDate') {
+        const previousDate = loan.dueDate ? new Date(loan.dueDate) : undefined;
+        const incomingValue = body.dueDate ? new Date(body.dueDate) : undefined;
+        const previousTime = previousDate ? previousDate.getTime() : null;
+        const incomingTime = incomingValue ? incomingValue.getTime() : null;
+        if (previousTime === incomingTime) {
+          continue;
+        }
+        loan.dueDate = incomingValue || undefined;
+        changes.push({ field: key, oldValue: previousDate, newValue: loan.dueDate });
+        continue;
+      }
+
+      if (key === 'status') {
+        const oldValue = loan.status;
+        if (body.status === oldValue) continue;
+        loan.status = body.status;
+        changes.push({ field: key, oldValue, newValue: loan.status });
+        continue;
       }
     }
 
@@ -231,10 +405,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       return errorResponse('No changes provided');
     }
 
+    if (sensitiveChanged) {
+      const newEncryptedData = encryptObject(decrypted);
+      (loan as any).encryptedData = newEncryptedData;
+      loan.markModified('encryptedData');
+      loan.set('counterparty', decrypted.counterparty ?? null, { strict: false });
+      loan.set('description', decrypted.description ?? '', { strict: false });
+    }
+
     loan.lastModifiedBy = a.uid;
     await loan.save();
 
-    return successResponse(loan, 'Loan updated');
+    const updatedLoan = await LoanModel.findById(params.id);
+    return successResponse(updatedLoan ?? loan, 'Loan updated');
   } catch (err: any) {
     console.error('Loan update error:', err);
     return serverErrorResponse(err?.message || 'Failed to update loan');

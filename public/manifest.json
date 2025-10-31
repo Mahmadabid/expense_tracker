@@ -1,0 +1,33 @@
+{
+  "name": "Expense & Loan Tracker",
+  "short_name": "Expense Tracker",
+  "description": "Track your expenses, income, and loans with collaborative features. Manage your finances on the go with offline support.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["finance", "productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "Add Expense",
+      "short_name": "Expense",
+      "description": "Add a new expense",
+      "url": "/?action=add-expense"
+    },
+    {
+      "name": "Add Income",
+      "short_name": "Income",
+      "description": "Add a new income",
+      "url": "/?action=add-income"
+    },
+    {
+      "name": "Add Loan",
+      "short_name": "Loan",
+      "description": "Add a new loan",
+      "url": "/?action=add-loan"
+    }
+  ],
+  "screenshots": []
+}
