@@ -20,7 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.20.0",
     "mongoose": "^8.18.3",
-    "next": "15.5.7",
+    "next": "15.5.9",
     "rate-limiter-flexible": "^8.0.1",
     "react": "19.1.2",
     "react-dom": "19.1.2"
