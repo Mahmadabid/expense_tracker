@@ -372,11 +372,11 @@ LoanSchema.index({ 'collaborators.userId': 1 });
 LoanSchema.index({ dueDate: 1 });
 
 // Pre-save middleware - Encrypt sensitive data BEFORE Mongoose processes it
-LoanSchema.pre('validate', function(next) {
+LoanSchema.pre('validate', function() {
   const doc = this as any;
   // If encryptedData already present (route pre-encrypted), skip
   if (doc.encryptedData && (doc.amount === undefined && doc.counterparty === undefined)) {
-    return next();
+    return;
   }
   
   // Check if we have plain data that needs encryption
@@ -441,15 +441,13 @@ LoanSchema.pre('validate', function(next) {
       console.log('[LOAN PRE-VALIDATE] Encrypted. EncryptedData exists:', !!doc.encryptedData);
     } catch (error) {
       console.error('[LOAN PRE-VALIDATE] Encryption error:', error);
-      return next(error as Error);
+      throw error;
     }
   }
-  
-  next();
 });
 
 // Also add pre-save to ensure they stay deleted
-LoanSchema.pre('save', function(next) {
+LoanSchema.pre('save', function() {
   const doc = this as any;
   
   // Double-check these fields are not present
@@ -489,8 +487,6 @@ LoanSchema.pre('save', function(next) {
   } else if (this.isModified() && !this.isNew) {
     doc.version = (doc.version || 1) + 1;
   }
-  
-  next();
 });
 
 // Post-find middleware - Decrypt sensitive data

@@ -99,15 +99,13 @@ EntrySchema.index({ tags: 1 });
 EntrySchema.index({ createdAt: -1 });
 
 // Pre-validate middleware - Encrypt BEFORE validation
-EntrySchema.pre('validate', function(next) {
+EntrySchema.pre('validate', function() {
   const doc = this as any;
   
   // Only encrypt if we have plain data (amount is the key indicator)
   const hasPlainData = doc.amount !== undefined;
   
   if (hasPlainData) {
-    console.log('[ENTRY PRE-VALIDATE] Starting encryption. Amount:', doc.amount);
-    
     try {
       const sensitiveData = {
         amount: doc.amount,
@@ -121,8 +119,6 @@ EntrySchema.pre('validate', function(next) {
         throw new Error('Encryption returned empty string');
       }
       
-      console.log('[ENTRY PRE-VALIDATE] Encrypted successfully. Length:', encrypted.length);
-      
       // Set encrypted data on the document
       doc.encryptedData = encrypted;
       
@@ -132,21 +128,16 @@ EntrySchema.pre('validate', function(next) {
       // Remove plain fields (they will be cleaned up in pre-save too)
       doc.amount = undefined;
       doc.description = undefined;
-      
-      console.log('[ENTRY PRE-VALIDATE] Encryption complete. EncryptedData set:', !!doc.encryptedData);
     } catch (error) {
-      console.error('[ENTRY PRE-VALIDATE] Encryption error:', error);
-      return next(error as Error);
+      throw error;
     }
   } else if (!doc.encryptedData) {
-    console.error('[ENTRY PRE-VALIDATE] No plain data and no encryptedData!');
+    // Let schema validation handle missing encryptedData
   }
-  
-  next();
 });
 
 // Pre-save middleware - Version management and cleanup
-EntrySchema.pre('save', function(next) {
+EntrySchema.pre('save', function() {
   const doc = this as any;
   
   // Remove temporary fields before saving (they should be in encryptedData now)
@@ -163,8 +154,6 @@ EntrySchema.pre('save', function(next) {
   } else if (this.isModified() && !this.isNew) {
     doc.version = (doc.version || 1) + 1;
   }
-  
-  next();
 });
 
 // Post-find middleware - Decrypt sensitive data

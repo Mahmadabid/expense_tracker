@@ -1,7 +1,8 @@
 export interface Environment {
   // MongoDB
   MONGODB_URI: string;
-  MONGODB_DB_NAME: string;
+  MONGODB_DB_NAME?: string;
+  MONGODB_AUTH_SOURCE?: string;
   
   // Firebase
   FIREBASE_PROJECT_ID: string;

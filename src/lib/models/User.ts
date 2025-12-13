@@ -69,11 +69,10 @@ const UserSchema = new Schema<UserDocument>(
 UserSchema.index({ lastActive: 1 });
 
 // Pre-save middleware
-UserSchema.pre('save', function(next) {
+UserSchema.pre('save', function() {
   if (this.lastActive !== undefined) {
     this.lastActive = new Date();
   }
-  next();
 });
 
 // Methods
