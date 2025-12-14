@@ -36,7 +36,7 @@ interface DashboardData {
 
 // Responsive Loan Card
 export function MainContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, signIn, signInAsGuest } = useAuth();
   const { addToast } = useToast();
   const [modalType, setModalType] = useState<null | 'transaction' | 'loan'>(null);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
@@ -492,6 +492,37 @@ export function MainContent() {
                   <span className="font-medium">{feature.text}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+              <Button
+                onClick={signIn}
+                variant="primary"
+                size="md"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                }
+                fullWidth
+              >
+                Sign In
+              </Button>
+
+              <Button
+                onClick={signInAsGuest}
+                variant="secondary"
+                size="md"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 21a8 8 0 10-16 0" />
+                  </svg>
+                }
+                fullWidth
+              >
+                Continue as Guest
+              </Button>
             </div>
           </div>
         </div>

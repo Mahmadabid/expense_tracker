@@ -69,16 +69,16 @@ export function Header() {
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 gap-2">
           {/* Logo/Title */}
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Logo" className="w-10 h-10" />
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <img src="/logo.png" alt="Logo" className="w-10 h-10 max-[390px]:w-8 max-[390px]:h-8 flex-shrink-0" />
+            <h1 className="text-lg sm:text-xl max-[390px]:text-base font-bold text-gray-900 dark:text-white truncate min-w-0">
               Expense Tracker
             </h1>
           </div>
 
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3 max-[390px]:space-x-1 flex-shrink-0">
             {/* Notifications */}
             {user && <NotificationBell />}
 
@@ -238,12 +238,14 @@ export function Header() {
                 </button>
                 <button
                   onClick={signIn}
-                  className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                  className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 max-[390px]:px-2.5 py-2 max-[390px]:py-1.5 rounded-lg max-[390px]:rounded-md text-sm max-[390px]:text-xs font-medium transition-colors flex items-center space-x-2 max-[390px]:space-x-1.5"
+                  aria-label="Sign in"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 max-[390px]:w-3.5 max-[390px]:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                   </svg>
-                  <span>Sign In</span>
+                  <span className="max-[390px]:hidden">Sign In</span>
+                  <span className="sr-only">Sign In</span>
                 </button>
               </div>
             )}

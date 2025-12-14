@@ -62,27 +62,14 @@ async function main() {
 
   console.log('🎨 Generating PNG PWA icons from', hasPng ? 'logo.png' : 'logo.svg', '...');
 
-  // Full common set (helps various platforms + avoids blur)
-  const anySizes = [72, 96, 128, 144, 152, 192, 384, 512];
+  // Minimal set (install + shortcut icons)
+  const anySizes = [96, 144, 512];
   for (const size of anySizes) {
     await writeAnyIcon(size);
     console.log(`✓ Wrote public/icons/icon-${size}x${size}.png`);
   }
 
-  // Maskable (Chrome/Android)
-  for (const size of [192, 512]) {
-    await writeMaskableIcon(size);
-    console.log(`✓ Wrote public/icons/icon-${size}x${size}-maskable.png`);
-  }
-
-  // iOS prefers 180x180
-  await loadLogo()
-    .resize(180, 180, { fit: 'cover' })
-    .png({ compressionLevel: 9, adaptiveFiltering: true })
-    .toFile(path.join(iconsDir, 'apple-touch-icon.png'));
-  console.log('✓ Wrote public/icons/apple-touch-icon.png');
-
-  // Note: favicon.png generation removed per preference; use /logo.png or /icons/icon-72x72.png instead
+  // Note: favicon + Apple touch icon files are not generated; layout uses /logo.png and /icons/icon-144x144.png
 
   console.log('\n✅ Done.');
   console.log('Tip: After changing icons/manifest, unregister the old service worker + clear site data in DevTools → Application.');

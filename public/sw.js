@@ -1,23 +1,14 @@
-const CACHE_NAME = 'expense-tracker-v3';
+const CACHE_NAME = 'expense-tracker-v6';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
   '/',
   '/offline.html',
-  '/manifest.json',
   '/logo.png',
-  '/icons/icon-72x72.png',
   '/icons/icon-96x96.png',
-  '/icons/icon-128x128.png',
   '/icons/icon-144x144.png',
-  '/icons/icon-152x152.png',
-  '/icons/icon-192x192.png',
-  '/icons/icon-384x384.png',
   '/icons/icon-512x512.png',
-  '/icons/icon-192x192-maskable.png',
-  '/icons/icon-512x512-maskable.png',
-  '/icons/apple-touch-icon.png',
 ];
 
 // Install event - cache static assets
@@ -69,6 +60,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never cache the manifest (avoids Lighthouse/DevTools seeing a stale manifest)
+  try {
+    const url = new URL(event.request.url);
+    if (url.pathname === '/manifest.json') {
+      event.respondWith(fetch(event.request, { cache: 'no-store' }));
+      return;
+    }
+  } catch {
+    // Ignore URL parsing errors and continue with normal handling
+  }
+
   event.respondWith(
     (async () => {
       try {
@@ -77,6 +79,14 @@ self.addEventListener('fetch', (event) => {
         
         // Cache successful responses
         if (networkResponse && networkResponse.status === 200) {
+          try {
+            const url = new URL(event.request.url);
+            if (url.pathname === '/manifest.json') {
+              return networkResponse;
+            }
+          } catch {
+            // Ignore
+          }
           const cache = await caches.open(CACHE_NAME);
           cache.put(event.request, networkResponse.clone());
         }
@@ -132,8 +142,8 @@ self.addEventListener('push', (event) => {
   
   const options = {
     body: data.body || 'New notification from Expense Tracker',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-192x192.png',
+    icon: '/icons/icon-512x512.png',
+    badge: '/icons/icon-144x144.png',
     vibrate: [200, 100, 200],
     data: data.data,
   };

@@ -29,7 +29,7 @@ const createPNGDataURL = (size) => {
   return svg;
 };
 
-const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+const sizes = [96, 144, 512];
 const iconsDir = path.join(__dirname, '..', 'public', 'icons');
 
 // Ensure directory exists
@@ -47,11 +47,6 @@ sizes.forEach(size => {
   fs.writeFileSync(path.join(iconsDir, svgFilename), svg);
   console.log(`✓ Created ${svgFilename}`);
 });
-
-// Also create Apple touch icon
-const appleTouchIcon = createPNGDataURL(180);
-fs.writeFileSync(path.join(iconsDir, 'apple-touch-icon.svg'), appleTouchIcon);
-console.log('✓ Created apple-touch-icon.svg');
 
 console.log('\n✅ Icon generation complete!');
 console.log('\n📝 Note: SVG files have been created as PNG fallbacks.');

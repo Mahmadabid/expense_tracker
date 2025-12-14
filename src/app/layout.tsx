@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description: 'Track your expenses, income, and loans with collaborative features',
   keywords: ['expense tracker', 'loan tracker', 'finance', 'money management', 'pwa', 'progressive web app'],
   authors: [{ name: 'Expense Tracker Team' }],
-  manifest: '/manifest.json',
+  manifest: '/manifest.json?v=6',
   viewport: {
     width: 'device-width',
     initialScale: 1,
@@ -32,12 +32,12 @@ export const metadata: Metadata = {
   robots: 'index, follow',
   icons: {
     icon: [
-      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
       { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
       { url: '/logo.png', type: 'image/png' },
     ],
     apple: [
-      { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
     ],
   },
 };
@@ -55,7 +55,7 @@ export default function RootLayout({
         <link rel="icon" href="/logo.png" type="image/png" sizes="32x32" />
         
         {/* PWA Meta Tags */}
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/manifest.json?v=6" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -64,9 +64,8 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#2563eb" />
         <meta name="msapplication-tap-highlight" content="no" />
         
-        {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+        {/* Apple Touch Icon */}
+        <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
         
         {/* Service Worker Registration */}
         <script
