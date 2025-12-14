@@ -32,13 +32,12 @@ export const metadata: Metadata = {
   robots: 'index, follow',
   icons: {
     icon: [
-      { url: '/logo.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icons/icon-144x144.svg', sizes: '144x144', type: 'image/svg+xml' },
-      { url: '/icons/icon-512x512.svg', sizes: '512x512', type: 'image/svg+xml' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/logo.png', type: 'image/png' },
     ],
     apple: [
-      { url: '/icons/apple-touch-icon.svg', sizes: '192x192', type: 'image/svg+xml' },
+      { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
   },
 };
@@ -53,8 +52,7 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="alternate icon" href="/favicon.ico" />
+        <link rel="icon" href="/logo.png" type="image/png" sizes="32x32" />
         
         {/* PWA Meta Tags */}
         <link rel="manifest" href="/manifest.json" />
@@ -67,8 +65,8 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
         
         {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icons/apple-touch-icon.svg" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         
         {/* Service Worker Registration */}
         <script

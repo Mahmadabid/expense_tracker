@@ -79,10 +79,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           userId: loan.userId,
           title: 'Loan Addition Pending Approval',
           message: `${userName || 'Someone'} wants to add ${loan.currency || 'PKR'} ${amount.toFixed(2)} to the loan${description ? ' - ' + description : ''}`,
-          type: 'loan_update',
-          relatedLoan: loan._id,
-          relatedUser: a.uid,
-          createdAt: new Date()
+          type: 'approval_request',
+          relatedId: loan._id?.toString(),
+          relatedType: 'loan',
+          relatedModel: 'Loan',
+          metadata: {
+            action: 'loan_addition',
+            amount,
+            description,
+            date: additionDate.toISOString(),
+            requestedBy: a.uid,
+            requestedByName: userName || 'User',
+          },
         });
       } catch (err) {
         console.error('Failed to send notification:', err);

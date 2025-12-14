@@ -125,10 +125,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
           userId: loan.userId,
           title: 'Addition Deletion Pending Approval',
           message: `${userName || 'Someone'} wants to delete a loan addition on ${loan.currency || 'PKR'}`,
-          type: 'loan_update',
-          relatedLoan: loan._id,
-          relatedUser: a.uid,
-          createdAt: new Date()
+          type: 'approval_request',
+          relatedId: loan._id?.toString(),
+          relatedType: 'loan',
+          relatedModel: 'Loan',
+          metadata: {
+            action: 'addition_deletion',
+            additionId,
+            requestedBy: a.uid,
+            requestedByName: userName || 'User',
+          },
         });
       } catch (err) {
         console.error('Failed to send notification:', err);

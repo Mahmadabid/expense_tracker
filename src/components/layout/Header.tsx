@@ -54,7 +54,7 @@ export function Header() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <img src="/logo.svg" alt="Logo" className="w-10 h-10" />
+              <img src="/logo.png" alt="Logo" className="w-10 h-10" />
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                 Expense Tracker
               </h1>
@@ -72,7 +72,7 @@ export function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo/Title */}
           <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="Logo" className="w-10 h-10" />
+            <img src="/logo.png" alt="Logo" className="w-10 h-10" />
             <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
               Expense Tracker
             </h1>

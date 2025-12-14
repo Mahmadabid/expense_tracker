@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expense-tracker-v1';
+const CACHE_NAME = 'expense-tracker-v3';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache on install
@@ -6,10 +6,18 @@ const STATIC_ASSETS = [
   '/',
   '/offline.html',
   '/manifest.json',
-  '/logo.svg',
-  '/icons/icon-144x144.svg',
-  '/icons/icon-512x512.svg',
-  '/icons/apple-touch-icon.svg',
+  '/logo.png',
+  '/icons/icon-72x72.png',
+  '/icons/icon-96x96.png',
+  '/icons/icon-128x128.png',
+  '/icons/icon-144x144.png',
+  '/icons/icon-152x152.png',
+  '/icons/icon-192x192.png',
+  '/icons/icon-384x384.png',
+  '/icons/icon-512x512.png',
+  '/icons/icon-192x192-maskable.png',
+  '/icons/icon-512x512-maskable.png',
+  '/icons/apple-touch-icon.png',
 ];
 
 // Install event - cache static assets
@@ -125,7 +133,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || 'New notification from Expense Tracker',
     icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    badge: '/icons/icon-192x192.png',
     vibrate: [200, 100, 200],
     data: data.data,
   };
