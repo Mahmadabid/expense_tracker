@@ -5,6 +5,8 @@ import crypto from 'crypto';
 
 interface LoanDocument extends Omit<Loan, '_id'>, Document {
   addPayment(payment: Omit<Payment, '_id' | 'createdAt'>): Payment;
+  editPayment(paymentId: string, payment: Omit<Payment, '_id' | 'createdAt'>): Payment;
+  deletePayment(paymentId: string): void;
   getTotalPaid(): number;
   canUserEdit(userId: string): boolean;
   canUserAddPayment(userId: string): boolean;
@@ -612,6 +614,51 @@ LoanSchema.methods.addPayment = function(payment: Omit<Payment, '_id' | 'created
   
   this.version = (this.version || 1) + 1;
   return newPayment;
+};
+
+LoanSchema.methods.editPayment = function(paymentId: string, updatedPayment: Omit<Payment, '_id' | 'createdAt'>) {
+  const paymentIndex = this.payments.findIndex((p: any) => p._id.toString() === paymentId);
+  if (paymentIndex === -1) throw new Error('Payment not found');
+  
+  const oldPayment = this.payments[paymentIndex];
+  const oldAmount = oldPayment.amount;
+  const newAmount = updatedPayment.amount;
+
+  // Update payment fields
+  this.payments[paymentIndex] = {
+    ...oldPayment,
+    ...updatedPayment,
+    _id: oldPayment._id,
+    createdAt: oldPayment.createdAt,
+  };
+
+  // Recalculate remaining amount: 
+  // (Remaining + oldPaymentAmount) - newPaymentAmount
+  this.remainingAmount = Math.max(0, this.remainingAmount + oldAmount - newAmount);
+  
+  if (this.remainingAmount === 0) {
+    this.status = 'paid';
+  } else {
+    this.status = 'active';
+  }
+  
+  this.version = (this.version || 1) + 1;
+  return this.payments[paymentIndex];
+};
+
+LoanSchema.methods.deletePayment = function(paymentId: string) {
+  const paymentIndex = this.payments.findIndex((p: any) => p._id.toString() === paymentId);
+  if (paymentIndex === -1) throw new Error('Payment not found');
+  
+  const payment = this.payments[paymentIndex];
+  
+  // Recalculate remaining amount: Remaining + deletedPaymentAmount
+  this.remainingAmount = this.remainingAmount + payment.amount;
+  
+  this.payments.splice(paymentIndex, 1);
+  
+  this.status = 'active';
+  this.version = (this.version || 1) + 1;
 };
 
 LoanSchema.methods.getTotalPaid = function(this: LoanDocument) {

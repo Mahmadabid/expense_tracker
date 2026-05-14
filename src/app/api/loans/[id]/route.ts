@@ -163,6 +163,93 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return successResponse(newComment, 'Comment added', 201);
     }
 
+    if (action === 'editPayment') {
+      const canEdit = isOwner || (requiresCollaboration && (isCounterparty || !!collaborator));
+      if (!canEdit) return unauthorizedResponse('Not authorized to edit payments');
+      
+      const { paymentId, amount, date, method, notes } = body;
+      if (!paymentId) return errorResponse('Payment ID is required');
+
+      const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+      let decrypted: any = {};
+      if ((loan as any).encryptedData) {
+        decrypted = decryptObject((loan as any).encryptedData);
+      }
+
+      const existingPayments: any[] = Array.isArray(decrypted.payments) ? decrypted.payments : [];
+      const paymentIndex = existingPayments.findIndex(p => p._id.toString() === paymentId);
+      if (paymentIndex === -1) return notFoundResponse('Payment not found');
+
+      const oldPayment = existingPayments[paymentIndex];
+      const newPayment = {
+        ...oldPayment,
+        amount: Number(amount) || oldPayment.amount,
+        date: date ? new Date(date) : oldPayment.date,
+        method: method || oldPayment.method,
+        notes: notes || oldPayment.notes,
+      };
+
+      existingPayments[paymentIndex] = newPayment;
+
+      // Recalculate
+      const totalPaid = existingPayments.reduce((sum: number, payment: any) => sum + (Number(payment?.amount) || 0), 0);
+      const totalPrincipal = Number(decrypted.amount || 0);
+      const newRemaining = Math.max(totalPrincipal - totalPaid, 0);
+
+      decrypted.payments = existingPayments;
+      decrypted.remainingAmount = newRemaining;
+
+      (loan as any).encryptedData = encryptObject(decrypted);
+      (loan as any).remainingAmount = newRemaining;
+      (loan as any).payments = existingPayments;
+      loan.status = newRemaining === 0 ? 'paid' : 'active';
+      loan.version = (loan.version || 1) + 1;
+      loan.lastModifiedBy = a.uid;
+      
+      await loan.save();
+      const updatedLoan = await LoanModel.findById(params.id);
+      return successResponse({ loan: updatedLoan }, 'Payment updated');
+    }
+
+    if (action === 'deletePayment') {
+      const canDelete = isOwner || (requiresCollaboration && (isCounterparty || !!collaborator));
+      if (!canDelete) return unauthorizedResponse('Not authorized to delete payments');
+      
+      const { paymentId } = body;
+      if (!paymentId) return errorResponse('Payment ID is required');
+
+      const { decryptObject, encryptObject } = await import('@/lib/utils/encryption');
+      let decrypted: any = {};
+      if ((loan as any).encryptedData) {
+        decrypted = decryptObject((loan as any).encryptedData);
+      }
+
+      const existingPayments: any[] = Array.isArray(decrypted.payments) ? decrypted.payments : [];
+      const paymentIndex = existingPayments.findIndex(p => p._id.toString() === paymentId);
+      if (paymentIndex === -1) return notFoundResponse('Payment not found');
+
+      const deletedPayment = existingPayments.splice(paymentIndex, 1)[0];
+
+      // Recalculate
+      const totalPaid = existingPayments.reduce((sum: number, payment: any) => sum + (Number(payment?.amount) || 0), 0);
+      const totalPrincipal = Number(decrypted.amount || 0);
+      const newRemaining = Math.max(totalPrincipal - totalPaid, 0);
+
+      decrypted.payments = existingPayments;
+      decrypted.remainingAmount = newRemaining;
+
+      (loan as any).encryptedData = encryptObject(decrypted);
+      (loan as any).remainingAmount = newRemaining;
+      (loan as any).payments = existingPayments;
+      loan.status = newRemaining === 0 ? 'paid' : 'active';
+      loan.version = (loan.version || 1) + 1;
+      loan.lastModifiedBy = a.uid;
+
+      await loan.save();
+      const updatedLoan = await LoanModel.findById(params.id);
+      return successResponse({ loan: updatedLoan }, 'Payment deleted');
+    }
+
     return errorResponse('Unsupported action');
   } catch (err: any) {
     console.error('Loan action error:', err);
