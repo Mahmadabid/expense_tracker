@@ -925,12 +925,12 @@ export function LoanCard({ loan, onUpdate, onOptimisticLoanUpdate, currentUserId
   return (
     <>
       {/* ─── REDESIGNED CARD ────────────────────────────────────────────────── */}
-      <div className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+      <div className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300">
 
         {/* Left accent bar */}
         <div className={`absolute inset-y-0 left-0 w-1 rounded-l-2xl ${isLent ? 'bg-gradient-to-b from-blue-400 to-cyan-500' : 'bg-gradient-to-b from-violet-500 to-pink-500'}`} />
 
-        <div className="px-5 py-4 pl-6">
+        <div className="px-5 py-4 pl-6 overflow-hidden">
 
           {/* ── Top row: avatar + name + menu ─────────────────────────────── */}
           <div className="flex items-center gap-3 mb-4">
